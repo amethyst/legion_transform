@@ -12,4 +12,4 @@ use crate::ecs::prelude::Entity;
 /// If the parent entity has its own parent (and so on) then the transforms
 /// will all be applied in order from the oldest ancestor to the child.
 #[derive(Debug, Clone, Eq, PartialEq, new)]
-pub struct Parent (pub Entity);
+pub struct Parent(pub Entity);

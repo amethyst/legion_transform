@@ -5,9 +5,9 @@ use crate::{
     ecs::prelude::*,
     math::Matrix4,
 };
-use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 
+#[derive(Debug)]
 struct TreeNode {
     pub entity: Entity,
     pub children: Vec<TreeNode>,
@@ -35,49 +35,47 @@ impl TransformSystem {
 
         let mut query =
             <(Read<Transform>, Tagged<Parent>)>::query().filter(changed::<Tagged<Parent>>());
-
         for (entity, _) in query.iter_entities(world) {
-            // If the node was visited already, then continue on.
-            if visited.contains(&entity) {
-                continue;
-            }
-
-            // Explore it DFS, which will rotate any nodes it comes across that are already roots in
-            // the forest into the tree.
-            let mut node = TreeNode::new(entity);
-            TransformSystem::explore_dfs(&mut node, &mut forest, &mut visited, world);
-
-            // Add it both the forest root and mark it visited.
-            forest.insert(entity, node);
-            visited.insert(entity);
+            TransformSystem::explore_tree_dfs(entity, &mut forest, &mut visited, world);
         }
 
         let mut query = <(Read<Transform>)>::query().filter(changed::<Transform>());
-
         for (entity, _) in query.iter_entities(world) {
-            // If the node was visited already, then continue on.
-            if visited.contains(&entity) {
-                continue;
-            }
-
-            // Explore it DFS, which will rotate any nodes it comes across that are already roots in
-            // the forest into the tree.
-            let mut node = TreeNode::new(entity);
-            TransformSystem::explore_dfs(&mut node, &mut forest, &mut visited, world);
-
-            // Add it both the forest root and mark it visited.
-            forest.insert(entity, node);
-            visited.insert(entity);
+            TransformSystem::explore_tree_dfs(entity, &mut forest, &mut visited, world);
         }
 
         // At this point the forest of transforms that need to be re-computed is built, we can
         // par_iter over it recursively and rebuild the `global_matrix` for each.
         let trees: Vec<_> = forest.values().collect();
         trees
-            .into_par_iter()
+            // .into_par_iter()
+            .into_iter()
             .for_each(|tree| TransformSystem::rebuild_recursive(tree, None, world));
     }
 
+    #[inline]
+    fn explore_tree_dfs(
+        entity: Entity,
+        forest: &mut HashMap<Entity, TreeNode>,
+        visited: &mut HashSet<Entity>,
+        world: &World,
+    ) {
+        // If the node was visited already, then continue on.
+        if visited.contains(&entity) {
+            return;
+        }
+
+        // Explore it DFS, which will rotate any nodes it comes across that are already roots in
+        // the forest into the tree.
+        let mut node = TreeNode::new(entity);
+        TransformSystem::explore_dfs(&mut node, forest, visited, world);
+
+        // Add it both the forest root and mark it visited.
+        forest.insert(entity, node);
+        visited.insert(entity);
+    }
+
+    #[inline]
     fn explore_dfs(
         parent_node: &mut TreeNode,
         forest: &mut HashMap<Entity, TreeNode>,
@@ -109,25 +107,24 @@ impl TransformSystem {
         }
     }
 
+    #[inline]
     fn rebuild_recursive(node: &TreeNode, parent_matrix: Option<Matrix4<f32>>, world: &World) {
-        let mut transform = world.get_component_mut::<Transform>(node.entity).unwrap();
-        transform.global_matrix = if let Some(parent_matrix) = parent_matrix {
-            parent_matrix * transform.matrix()
-        } else {
-            transform.matrix()
+        let global_matrix = {
+            if let Some(parent_matrix) = parent_matrix {
+                let mut transform = world.get_component_mut::<Transform>(node.entity).unwrap();
+                transform.global_matrix = parent_matrix * transform.matrix();
+                transform.global_matrix
+            } else {
+                let mut transform = world.get_component_mut::<Transform>(node.entity).unwrap();
+                transform.global_matrix = transform.matrix();
+                transform.global_matrix
+            }
         };
 
-        debug_assert!(
-            transform.is_finite(),
-            format!(
-                "Entity {:?} had a non-finite `Transform` {:?}",
-                node.entity, transform
-            )
-        );
-
         // Re-compute any children in parallel.
-        node.children.par_iter().for_each(|child| {
-            TransformSystem::rebuild_recursive(child, Some(transform.global_matrix), world)
+        // node.children.par_iter().for_each(|child| {
+        node.children.iter().for_each(|child| {
+            TransformSystem::rebuild_recursive(child, Some(global_matrix), world)
         });
     }
 }
@@ -138,8 +135,10 @@ mod tests {
     use crate::{
         components::{Parent, Transform},
         ecs::prelude::*,
-        math::{Matrix4, Quaternion, Unit, Vector3},
+        math::{Matrix4, Quaternion, Translation3, Unit, UnitQuaternion, Vector3},
     };
+    use approx::*;
+    use std::f32::consts::PI;
 
     #[test]
     fn transform_matrix() {
@@ -250,5 +249,146 @@ mod tests {
         let e3_transform = world.get_component::<Transform>(e3).unwrap();
         let a3 = e3_transform.global_matrix();
         let _a4 = together(*a3, local3.matrix());
+    }
+
+    /// Tests that re-parenting transforms correctly causes descendants to be re-computed.
+    #[test]
+    fn reparenting() {
+        let system = TransformSystem::new();
+        let mut world = Universe::new().create_world();
+
+        // Create a translation and a rotation transform.
+        let forward_one_transform = Transform::from(Vector3::new(1.0, 0.0, 0.0));
+        let mut rotate_right_90 = Transform::default();
+        rotate_right_90.set_rotation_euler(0.0, PI, 0.0);
+
+        // Make 2 forward transforms, and 1 rotation
+        let e = world.insert(
+            (),
+            vec![
+                (forward_one_transform.clone(),),
+                (forward_one_transform.clone(),),
+                (rotate_right_90.clone(),),
+            ],
+        );
+        let [fwd1, fwd2, rot] = [e[0], e[1], e[2]];
+
+        // Run the System without any parenting
+        system.run_now(&world);
+
+        // Assert it didn't change any of the transforms (none of them had parents).
+        assert_relative_eq!(
+            world
+                .get_component::<Transform>(fwd1)
+                .unwrap()
+                .global_matrix,
+            Translation3::new(1.0, 0.0, 0.0).into(),
+            max_relative = 0.000_001,
+        );
+        assert_relative_eq!(
+            world
+                .get_component::<Transform>(fwd2)
+                .unwrap()
+                .global_matrix,
+            Translation3::new(1.0, 0.0, 0.0).into(),
+            max_relative = 0.000_001,
+        );
+        assert_relative_eq!(
+            world.get_component::<Transform>(rot).unwrap().global_matrix,
+            UnitQuaternion::from_euler_angles(0.0, PI, 0.0).into(),
+            max_relative = 0.000_001,
+        );
+
+        // Create 2 tree:
+        // - Rot
+        // - fwd1 -> fwd2
+        world.add_tag(fwd2, Parent(fwd1));
+        system.run_now(&world);
+
+        // Global matrix of fwd2 should be double the distance, the rest should be the same.
+        assert_relative_eq!(
+            world
+                .get_component::<Transform>(fwd1)
+                .unwrap()
+                .global_matrix,
+            Translation3::new(1.0, 0.0, 0.0).into(),
+            max_relative = 0.000_001,
+        );
+        assert_relative_eq!(
+            world
+                .get_component::<Transform>(fwd2)
+                .unwrap()
+                .global_matrix,
+            Translation3::new(2.0, 0.0, 0.0).into(),
+            max_relative = 0.000_001,
+        );
+        assert_relative_eq!(
+            world.get_component::<Transform>(rot).unwrap().global_matrix,
+            UnitQuaternion::from_euler_angles(0.0, PI, 0.0).into(),
+            max_relative = 0.000_001,
+        );
+
+        // Re-parent to the tree
+        // - fwd1 -> Rot -> fwd2
+        world.add_tag(fwd2, Parent(rot));
+        world.add_tag(rot, Parent(fwd1));
+        system.run_now(&world);
+
+        assert_relative_eq!(
+            world
+                .get_component::<Transform>(fwd1)
+                .unwrap()
+                .global_matrix,
+            Translation3::new(1.0, 0.0, 0.0).into(),
+            max_relative = 0.000_001,
+        );
+        assert_relative_eq!(
+            world
+                .get_component::<Transform>(fwd2)
+                .unwrap()
+                .global_matrix,
+            (Translation3::new(1.0, 0.0, 0.0)
+                * UnitQuaternion::from_euler_angles(0.0, PI, 0.0)
+                * Translation3::new(1.0, 0.0, 0.0))
+            .into(),
+            max_relative = 0.000_001,
+        );
+        assert_relative_eq!(
+            world.get_component::<Transform>(rot).unwrap().global_matrix,
+            (Translation3::new(1.0, 0.0, 0.0) * UnitQuaternion::from_euler_angles(0.0, PI, 0.0))
+                .into(),
+            max_relative = 0.000_001,
+        );
+
+        // Un-parent and re-parent into the two trees:
+        // - fwd1
+        // - rot -> fw2
+        world.remove_tag::<Parent>(fwd1);
+        world.remove_tag::<Parent>(rot);
+        world.add_tag(fwd2, Parent(rot));
+        system.run_now(&world);
+
+        assert_relative_eq!(
+            world
+                .get_component::<Transform>(fwd1)
+                .unwrap()
+                .global_matrix,
+            Translation3::new(1.0, 0.0, 0.0).into(),
+            max_relative = 0.000_001,
+        );
+        assert_relative_eq!(
+            world
+                .get_component::<Transform>(fwd2)
+                .unwrap()
+                .global_matrix,
+            (UnitQuaternion::from_euler_angles(0.0, PI, 0.0) * Translation3::new(1.0, 0.0, 0.0))
+                .into(),
+            max_relative = 0.000_001,
+        );
+        assert_relative_eq!(
+            world.get_component::<Transform>(rot).unwrap().global_matrix,
+            UnitQuaternion::from_euler_angles(0.0, PI, 0.0).into(),
+            max_relative = 0.000_001,
+        );
     }
 }
