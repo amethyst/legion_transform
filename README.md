@@ -57,4 +57,6 @@ _These are causing unit tests to fail, but they are manually confirmed-working
 if not for the Legion issues._
 
 - Legion has no ability to detect deleted entities or components.
+  [GitHub Issue #13](https://github.com/TomGillen/legion/issues/13)
 - Legion has a bug where Tags are not being correctly mutated.
+  [GitHub Issue #12](https://github.com/TomGillen/legion/issues/12)
