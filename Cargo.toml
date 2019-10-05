@@ -1,19 +1,14 @@
 [package]
 name = "legion_transform"
-version = "0.1.0"
+version = "0.3.0"
 authors = ["Alec Thilenius <alec@thilenius.com>"]
 edition = "2018"
 
 license = "MIT"
 
 [dependencies]
-alga = { version = "0.9.1", default-features = false }
-derive-new = "0.5.8"
-getset = "0.0.8"
-legion = { git = "https://github.com/TomGillen/legion.git" }
-log = "0.4.8"
+legion = { git = "https://github.com/TomGillen/legion.git", branch = "systems" }
 nalgebra = { version = "0.18.1", features = ["serde-serialize", "mint"] }
-num-traits = "0.2.8"
 rayon = "1.2.0"
 serde = { version = "1", features = ["derive"] }
 
