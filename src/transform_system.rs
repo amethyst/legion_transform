@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 use crate::{components::*, ecs::prelude::*};
+use rayon::prelude::*;
+use smallvec::SmallVec;
 use std::collections::{HashMap, HashSet};
 
 /// Used to create a forest of hierarchy deltas, which is needed to correctly compute each Entities
@@ -51,43 +53,72 @@ impl WorldMutation {
     }
 }
 
+#[derive(Default)]
 pub struct TransformSystemBundle;
 impl TransformSystemBundle {
-    pub fn child_update_system(world: &mut World) {
-        // It's currently not possible to do this with a SystemBuilder (as we need to mutate the
-        // world).
-        let mut query = Write::<Parent>::query().filter(changed::<Parent>());
-        let mut mutations = Vec::new();
+    pub fn build(&mut self, _: &mut World) -> Vec<Box<dyn Schedulable>> {
+        let child_update_system = SystemBuilder::<()>::new("ChildUpdateSystem")
+            // Here, we assume ALL entities always have a Parent/child
+            // We garuntee this with the seperate `changed` filter on Transform, and always add them.
+            .with_query(<Write<Parent>>::query().filter(changed::<Parent>()))
+            .with_query(<Write<Children>>::query())
+            .build(move |commands, _resource, queries| {
+                let mut additions_this_frame =
+                    HashMap::<Entity, SmallVec<[Entity; 8]>>::with_capacity(16);
 
-        for (entity, mut parent) in query.iter_entities(world) {
-            if let Some(previous_parent) = parent.previous_parent {
-                // If the previous parent IS the new parent, then there is nothing to do.
-                if previous_parent == parent.entity {
-                    continue;
+                let (parent_changes_query, children_query) = queries;
+
+                for (entity, mut parent) in parent_changes_query.iter_entities() {
+                    if let Some(previous_parent) = parent.previous_parent {
+                        // If the previous parent IS the new parent, then there is nothing to do.
+                        if previous_parent == parent.entity {
+                            continue;
+                        }
+
+                        if let Some((_, mut parent_children)) =
+                            children_query.par_iter_chunks().find_map_any(|mut chunk| {
+                                chunk
+                                    .iter_entities()
+                                    .find(|(entity, _)| *entity == previous_parent)
+                            })
+                        {
+                            (*parent_children).0.retain(|e| *e != entity);
+                        }
+                    }
+
+                    parent.previous_parent = Some(parent.entity);
+
+                    if let Some((_, mut parent_children)) =
+                        children_query.par_iter_chunks().find_map_any(|mut chunk| {
+                            chunk
+                                .iter_entities()
+                                .find(|(entity, _)| *entity == parent.entity)
+                        })
+                    {
+                        // This is the parent
+                        (*parent_children).0.push(entity);
+                        log::trace!("Pushing component");
+                    } else {
+                        // The parent doesnt have a children entity, lets add it
+                        additions_this_frame
+                            .entry(parent.entity)
+                            .or_insert_with(Default::default)
+                            .push(entity);
+                    }
                 }
 
-                // Mutation: Remove `entity` from the `Children` list of the `previous_parent`.
-                mutations.push(WorldMutation::RemoveEntityFromParentChildren(
-                    entity,
-                    previous_parent,
-                ));
-            }
+                additions_this_frame.iter().for_each(|(k, v)| {
+                    commands.add_component(*k, Children::with(v));
+                });
+            });
 
-            // Set the previous parent to the new one, this can be done right now as we are
-            // iterating mutably.
-            parent.previous_parent = Some(parent.entity);
+        let set_depths_system = SystemBuilder::<()>::new("SetDepthsSystem")
+            .with_query(Write::<Parent>::query())
+            .build(move |_commands, _resource, _queries| {
+                log::trace!("Enter: SetDepthsSystem");
+            });
 
-            // Mutation: add `entity` to the `Children` of `parent.entity`.
-            mutations.push(WorldMutation::AddEntityToParentChildren(
-                entity,
-                parent.entity,
-            ));
-        }
-
-        // Apply all world mutations
-        for mutation in mutations.into_iter() {
-            mutation.apply(world);
-        }
+        vec![child_update_system, set_depths_system]
     }
 
     pub fn set_depths_system(world: &mut World) {
@@ -207,10 +238,16 @@ impl TransformSystemBundle {
 #[cfg(test)]
 mod test {
     use super::*;
-
+    use legion::{command::CommandBuffer, resource::Resources};
     #[test]
     fn correct_children() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
         let mut world = Universe::new().create_world();
+        let mut commands = CommandBuffer::default();
+        let resources = Resources::default();
+
+        let systems = TransformSystemBundle::default().build(&mut world);
 
         // Add 3 entities
         let entities = world.insert(
@@ -228,7 +265,8 @@ mod test {
         world.add_component(e2, Parent::new(parent));
 
         // Run the system on it
-        TransformSystemBundle::child_update_system(&mut world);
+        systems[0].run(&resources, &mut world);
+        systems[0].command_buffer_mut().write(&mut world);
 
         assert_eq!(
             world
@@ -245,7 +283,8 @@ mod test {
         (*world.get_component_mut::<Parent>(e1).unwrap()).entity = e2;
 
         // Run the system on it
-        TransformSystemBundle::child_update_system(&mut world);
+        systems[0].run(&resources, &mut world);
+        systems[0].command_buffer_mut().write(&mut world);
 
         assert_eq!(
             world
@@ -274,7 +313,8 @@ mod test {
         world.delete(e1);
 
         // Run the system on it
-        TransformSystemBundle::child_update_system(&mut world);
+        systems[0].run(&resources, &mut world);
+        systems[0].command_buffer_mut().write(&mut world);
 
         assert_eq!(
             world
@@ -290,7 +330,13 @@ mod test {
 
     #[test]
     fn depth_test() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
         let mut world = Universe::new().create_world();
+        let mut commands = CommandBuffer::default();
+        let resources = Resources::default();
+
+        let systems = TransformSystemBundle::default().build(&mut world);
 
         // Add 3 entities
         let entities = world.insert(
@@ -308,7 +354,8 @@ mod test {
         world.add_component(e2, Parent::new(parent));
 
         // Run the systems on it
-        TransformSystemBundle::child_update_system(&mut world);
+        systems[0].run(&resources, &mut world);
+        systems[0].command_buffer_mut().write(&mut world);
         TransformSystemBundle::set_depths_system(&mut world);
 
         // Both should be at a depth of 1.
@@ -319,7 +366,10 @@ mod test {
         (*world.get_component_mut::<Parent>(e2).unwrap()).entity = e1;
 
         // Run the systems on it
-        TransformSystemBundle::child_update_system(&mut world);
+
+        systems[0].run(&resources, &mut world);
+        systems[0].command_buffer_mut().write(&mut world);
+
         TransformSystemBundle::set_depths_system(&mut world);
 
         // This fails because Legion is not correctly mutating Tags.
