@@ -7,10 +7,11 @@ edition = "2018"
 license = "MIT"
 
 [dependencies]
-legion = { git = "https://github.com/TomGillen/legion.git", branch = "systems" }
+legion = { git = "https://github.com/jaynus/legion.git", branch = "systems" }
 nalgebra = { version = "0.18.1", features = ["serde-serialize", "mint"] }
 rayon = "1.2.0"
 serde = { version = "1", features = ["derive"] }
+smallvec = "0.6"
 
 [dev-dependencies]
 approx = "0.3"

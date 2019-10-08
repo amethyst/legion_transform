@@ -40,11 +40,11 @@ impl WorldMutation {
                     (*parent_children).0.push(entity);
                     return;
                 }
-                world.add_component(parent, Children::with(entity));
+                world.add_component(parent, Children::with(&[entity]));
             }
             Self::RemoveEntityFromParentChildren(entity, parent) => {
                 if let Some(mut parent_children) = world.get_component_mut::<Children>(parent) {
-                    (*parent_children).0.remove_element(&entity);
+                    (*parent_children).0.retain(|e| *e != entity);
                 }
             }
         }
