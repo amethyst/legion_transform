@@ -62,7 +62,7 @@ impl TransformSystemBundle {
             // We garuntee this with the seperate `changed` filter on Transform, and always add them.
             .with_query(<Write<Parent>>::query().filter(changed::<Parent>()))
             .with_query(<Write<Children>>::query())
-            .build(move |commands, _resource, queries| {
+            .build(move |commands, _, _, queries| {
                 let mut additions_this_frame =
                     HashMap::<Entity, SmallVec<[Entity; 8]>>::with_capacity(16);
 
@@ -114,7 +114,7 @@ impl TransformSystemBundle {
 
         let set_depths_system = SystemBuilder::<()>::new("SetDepthsSystem")
             .with_query(Write::<Parent>::query())
-            .build(move |_commands, _resource, _queries| {
+            .build(move |_commands, _world, _resource, _queries| {
                 log::trace!("Enter: SetDepthsSystem");
             });
 
