@@ -61,12 +61,12 @@ impl TransformSystemBundle {
             // Here, we assume ALL entities always have a Parent/child
             // We garuntee this with the seperate `changed` filter on Transform, and always add them.
             .with_query(<Write<Parent>>::query().filter(changed::<Parent>()))
-            .with_query(<Write<Children>>::query())
-            .build(move |commands, _, _, queries| {
+            .write_component::<Children>()
+            .build(move |commands, world, _, queries| {
                 let mut additions_this_frame =
                     HashMap::<Entity, SmallVec<[Entity; 8]>>::with_capacity(16);
 
-                let (parent_changes_query, children_query) = queries;
+                let parent_changes_query = queries;
 
                 for (entity, mut parent) in parent_changes_query.iter_entities() {
                     if let Some(previous_parent) = parent.previous_parent {
@@ -75,12 +75,8 @@ impl TransformSystemBundle {
                             continue;
                         }
 
-                        if let Some((_, mut parent_children)) =
-                            children_query.par_iter_chunks().find_map_any(|mut chunk| {
-                                chunk
-                                    .iter_entities()
-                                    .find(|(entity, _)| *entity == previous_parent)
-                            })
+                        if let Some(mut parent_children) =
+                            world.get_component_mut::<Children>(previous_parent)
                         {
                             (*parent_children).0.retain(|e| *e != entity);
                         }
@@ -88,12 +84,8 @@ impl TransformSystemBundle {
 
                     parent.previous_parent = Some(parent.entity);
 
-                    if let Some((_, mut parent_children)) =
-                        children_query.par_iter_chunks().find_map_any(|mut chunk| {
-                            chunk
-                                .iter_entities()
-                                .find(|(entity, _)| *entity == parent.entity)
-                        })
+                    if let Some(mut parent_children) =
+                        world.get_component_mut::<Children>(parent.entity)
                     {
                         // This is the parent
                         (*parent_children).0.push(entity);
