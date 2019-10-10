@@ -7,14 +7,11 @@ edition = "2018"
 license = "MIT"
 
 [dependencies]
-legion = { path = "../legion" }
+legion = { git = "https://github.com/jaynus/legion.git", branch = "systems" }
+log = "0.4"
 nalgebra = { version = "0.18.1", features = ["serde-serialize", "mint"] }
-rayon = "1.2.0"
 serde = { version = "1", features = ["derive"] }
 smallvec = "0.6"
-log = "0.4"
 
 [dev-dependencies]
 env_logger = "0.7"
-approx = "0.3"
-ron = "0.5.1"

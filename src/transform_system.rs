@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 use crate::{components::*, ecs::prelude::*};
-use rayon::prelude::*;
 use smallvec::SmallVec;
 use std::collections::{HashMap, HashSet};
 
@@ -27,46 +26,18 @@ impl TreeNode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DepthTag(u32);
 
-/// Used to buffer world mutations within a context that already has a reference to the world.
-enum WorldMutation {
-    AddEntityToParentChildren(Entity, Entity),
-    RemoveEntityFromParentChildren(Entity, Entity),
-}
-
-impl WorldMutation {
-    pub fn apply(self, world: &mut World) {
-        match self {
-            Self::AddEntityToParentChildren(entity, parent) => {
-                // Get or create `Children` component, and add `entity` to it.
-                if let Some(mut parent_children) = world.get_component_mut::<Children>(parent) {
-                    (*parent_children).0.push(entity);
-                    return;
-                }
-                world.add_component(parent, Children::with(&[entity]));
-            }
-            Self::RemoveEntityFromParentChildren(entity, parent) => {
-                if let Some(mut parent_children) = world.get_component_mut::<Children>(parent) {
-                    (*parent_children).0.retain(|e| *e != entity);
-                }
-            }
-        }
-    }
-}
-
 #[derive(Default)]
 pub struct TransformSystemBundle;
 impl TransformSystemBundle {
     pub fn build(&mut self, _: &mut World) -> Vec<Box<dyn Schedulable>> {
         let child_update_system = SystemBuilder::<()>::new("ChildUpdateSystem")
-            // Here, we assume ALL entities always have a Parent/child
-            // We garuntee this with the seperate `changed` filter on Transform, and always add them.
+            // Here, we assume ALL entities always have a Parent/child. We guarantee this with the
+            // separate `changed` filter on Transform, and always add them.
             .with_query(<Write<Parent>>::query().filter(changed::<Parent>()))
             .write_component::<Children>()
-            .build(move |commands, world, _, queries| {
+            .build(move |commands, world, _, parent_changes_query| {
                 let mut additions_this_frame =
                     HashMap::<Entity, SmallVec<[Entity; 8]>>::with_capacity(16);
-
-                let parent_changes_query = queries;
 
                 for (entity, mut parent) in parent_changes_query.iter_entities() {
                     if let Some(previous_parent) = parent.previous_parent {
@@ -91,7 +62,7 @@ impl TransformSystemBundle {
                         (*parent_children).0.push(entity);
                         log::trace!("Pushing component");
                     } else {
-                        // The parent doesnt have a children entity, lets add it
+                        // The parent doesn't have a children entity, lets add it
                         additions_this_frame
                             .entry(parent.entity)
                             .or_insert_with(Default::default)
@@ -134,7 +105,7 @@ impl TransformSystemBundle {
         for tree_root in trees.iter() {
             let entity = tree_root.entity;
 
-            // The starting depth of the parent of `entity`, or 0.
+            // The starting depth of the parent of `entity` or 0, plus 1.
             let start_depth = 1 + {
                 // Only entities with changed parents are in this list, so just unwrap without
                 // check.
@@ -230,13 +201,13 @@ impl TransformSystemBundle {
 #[cfg(test)]
 mod test {
     use super::*;
-    use legion::{command::CommandBuffer, resource::Resources};
+    use legion::resource::Resources;
+
     #[test]
     fn correct_children() {
         let _ = env_logger::builder().is_test(true).try_init();
 
         let mut world = Universe::new().create_world();
-        let mut commands = CommandBuffer::default();
         let resources = Resources::default();
 
         let systems = TransformSystemBundle::default().build(&mut world);
@@ -300,8 +271,6 @@ mod test {
             vec![e1]
         );
 
-        // TODO: This wont work until Legion supports change detection for deleted entities :(
-        // Remove e1
         world.delete(e1);
 
         // Run the system on it
@@ -325,7 +294,6 @@ mod test {
         let _ = env_logger::builder().is_test(true).try_init();
 
         let mut world = Universe::new().create_world();
-        let mut commands = CommandBuffer::default();
         let resources = Resources::default();
 
         let systems = TransformSystemBundle::default().build(&mut world);
