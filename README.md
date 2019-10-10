@@ -1,5 +1,10 @@
 # Hierarchical Legion Transform
 
+[![Build Status][build_img]][build_lnk]
+
+[build_img]: https://travis-ci.org/AThilenius/legion_transform.svg?branch=master
+[build_lnk]: https://travis-ci.org/AThilenius/legion_transform
+
 > Not ready for use, only partially complete and still being re-written from the
 > ground up every day or two.
 
