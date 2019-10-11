@@ -10,6 +10,7 @@ license = "MIT"
 legion = { git = "https://github.com/jaynus/legion.git", branch = "systems" }
 log = "0.4"
 nalgebra = { version = "0.18.1", features = ["serde-serialize", "mint"] }
+rayon = "1.2"
 serde = { version = "1", features = ["derive"] }
 smallvec = "0.6"
 

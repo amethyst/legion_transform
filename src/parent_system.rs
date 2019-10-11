@@ -1,5 +1,8 @@
 #![allow(dead_code)]
-use crate::{components::*, ecs::prelude::*};
+use crate::{
+    components::*,
+    ecs::{prelude::*, system::PreparedWorld},
+};
 use smallvec::SmallVec;
 use std::collections::{HashMap, HashSet};
 
@@ -27,12 +30,10 @@ impl TreeNode {
 struct DepthTag(u32);
 
 #[derive(Default)]
-pub struct TransformSystemBundle;
-impl TransformSystemBundle {
+pub struct ParentSystemBundle;
+impl ParentSystemBundle {
     pub fn build(&mut self, _: &mut World) -> Vec<Box<dyn Schedulable>> {
         let child_update_system = SystemBuilder::<()>::new("ChildUpdateSystem")
-            // Here, we assume ALL entities always have a Parent/child. We guarantee this with the
-            // separate `changed` filter on Transform, and always add them.
             .with_query(<Write<Parent>>::query().filter(changed::<Parent>()))
             .write_component::<Children>()
             .build(move |commands, world, _, parent_changes_query| {
@@ -76,49 +77,59 @@ impl TransformSystemBundle {
             });
 
         let set_depths_system = SystemBuilder::<()>::new("SetDepthsSystem")
-            .with_query(Write::<Parent>::query())
-            .build(move |_commands, _world, _resource, _queries| {
-                log::trace!("Enter: SetDepthsSystem");
-            });
+            .with_query(Write::<Parent>::query().filter(changed::<Parent>()))
+            .read_component::<Children>()
+            .build(
+                move |mut commands, world, _resource, changed_parents_query| {
+                    // Because re-tagging entities is expensive, we first fully build out a forest
+                    // of updated hierarchies before iterating through that to set DepthTags.
+                    let mut forest: HashMap<Entity, TreeNode> = HashMap::new();
+                    let mut visited: HashSet<Entity> = HashSet::new();
+
+                    // Parents there were changed from the previous system run. Collected into a
+                    // vector.
+                    let changed_parents: Vec<_> = changed_parents_query
+                        .iter_entities()
+                        .map(|(e, _)| e)
+                        .collect();
+
+                    for entity in changed_parents {
+                        ParentSystemBundle::explore_tree_dfs(
+                            entity,
+                            &mut forest,
+                            &mut visited,
+                            world,
+                        );
+                    }
+
+                    let trees: Vec<_> = forest.values().collect();
+                    for tree_root in trees.iter() {
+                        let entity = tree_root.entity;
+
+                        // The starting depth of the parent of `entity` or 0, plus 1.
+                        let start_depth = 1 + {
+                            // Only entities with changed parents are in this list, so just unwrap
+                            // without check.
+                            let parent_entity =
+                                world.get_component::<Parent>(entity).unwrap().entity;
+                            world
+                                .get_component::<Parent>(parent_entity)
+                                .map(|pe_cmp| pe_cmp.depth)
+                                .unwrap_or(0)
+                        };
+
+                        // Recursively set the tree depth (and tags).
+                        ParentSystemBundle::set_depths_recursive(
+                            &mut commands,
+                            tree_root,
+                            world,
+                            start_depth,
+                        );
+                    }
+                },
+            );
 
         vec![child_update_system, set_depths_system]
-    }
-
-    pub fn set_depths_system(world: &mut World) {
-        // Because re-tagging entities is expensive, we first fully build out a forest of updated
-        // hierarchies before iterating through that to set DepthTags.
-        let mut forest: HashMap<Entity, TreeNode> = HashMap::new();
-        let mut visited: HashSet<Entity> = HashSet::new();
-
-        // Parents there were changed from the previous system run. Collected into a vector.
-        let changed_parents: Vec<_> = Read::<Parent>::query()
-            .filter(changed::<Parent>())
-            .iter_entities(world)
-            .map(|(e, _)| e)
-            .collect();
-
-        for entity in changed_parents {
-            TransformSystemBundle::explore_tree_dfs(entity, &mut forest, &mut visited, world);
-        }
-
-        let trees: Vec<_> = forest.values().collect();
-        for tree_root in trees.iter() {
-            let entity = tree_root.entity;
-
-            // The starting depth of the parent of `entity` or 0, plus 1.
-            let start_depth = 1 + {
-                // Only entities with changed parents are in this list, so just unwrap without
-                // check.
-                let parent_entity = world.get_component::<Parent>(entity).unwrap().entity;
-                world
-                    .get_component::<Parent>(parent_entity)
-                    .map(|pe_cmp| pe_cmp.depth)
-                    .unwrap_or(0)
-            };
-
-            // Recursively set the tree depth (and tags).
-            TransformSystemBundle::set_depths_recursive(tree_root, world, start_depth);
-        }
     }
 
     #[inline]
@@ -126,17 +137,17 @@ impl TransformSystemBundle {
         entity: Entity,
         forest: &mut HashMap<Entity, TreeNode>,
         visited: &mut HashSet<Entity>,
-        world: &World,
+        world: &PreparedWorld,
     ) {
         // If the node was visited already, then continue on.
         if visited.contains(&entity) {
             return;
         }
 
-        // Explore it DFS, which will rotate any nodes it comes across that are already roots in
-        // the forest into the tree.
+        // Explore it DFS, which will rotate any nodes it comes across that are already roots in the
+        // forest into the tree.
         let mut node = TreeNode::new(entity);
-        TransformSystemBundle::explore_dfs(&mut node, forest, visited, world);
+        ParentSystemBundle::explore_dfs(&mut node, forest, visited, world);
 
         // Add it both the forest root and mark it visited.
         forest.insert(entity, node);
@@ -148,7 +159,7 @@ impl TransformSystemBundle {
         parent_node: &mut TreeNode,
         forest: &mut HashMap<Entity, TreeNode>,
         visited: &mut HashSet<Entity>,
-        world: &World,
+        world: &PreparedWorld,
     ) {
         // Gather and iterate children.
         let parent = parent_node.entity;
@@ -173,13 +184,18 @@ impl TransformSystemBundle {
             // Visit the child recursively.
             visited.insert(child_entity);
             let mut child_node = TreeNode::new(child_entity);
-            TransformSystemBundle::explore_dfs(&mut child_node, forest, visited, world);
+            ParentSystemBundle::explore_dfs(&mut child_node, forest, visited, world);
             parent_node.children.push(child_node);
         }
     }
 
     #[inline]
-    fn set_depths_recursive(node: &TreeNode, world: &mut World, depth: u32) {
+    fn set_depths_recursive(
+        commands: &mut CommandBuffer,
+        node: &TreeNode,
+        world: &mut PreparedWorld,
+        depth: u32,
+    ) {
         let parent = node.entity;
         let original_depth = {
             let mut parent_component = world.get_component_mut::<Parent>(parent).unwrap();
@@ -189,11 +205,11 @@ impl TransformSystemBundle {
         };
 
         if original_depth != depth {
-            world.add_tag(parent, DepthTag(depth));
+            commands.add_tag(parent, DepthTag(depth));
         }
 
         for child in node.children.iter() {
-            TransformSystemBundle::set_depths_recursive(child, world, depth + 1);
+            ParentSystemBundle::set_depths_recursive(commands, child, world, depth + 1);
         }
     }
 }
@@ -210,15 +226,15 @@ mod test {
         let mut world = Universe::new().create_world();
         let resources = Resources::default();
 
-        let systems = TransformSystemBundle::default().build(&mut world);
+        let systems = ParentSystemBundle::default().build(&mut world);
 
         // Add 3 entities
         let entities = world.insert(
             (),
             vec![
-                (TransformSimilarity3::identity(),),
-                (TransformSimilarity3::identity(),),
-                (TransformSimilarity3::identity(),),
+                (TTranslation::identity(),),
+                (TTranslation::identity(),),
+                (TTranslation::identity(),),
             ],
         );
         let (parent, e1, e2) = (entities[0], entities[1], entities[2]);
@@ -246,8 +262,10 @@ mod test {
         (*world.get_component_mut::<Parent>(e1).unwrap()).entity = e2;
 
         // Run the system on it
-        systems[0].run(&resources, &mut world);
-        systems[0].command_buffer_mut().write(&mut world);
+        for system in systems.iter() {
+            system.run(&resources, &mut world);
+            system.command_buffer_mut().write(&mut world);
+        }
 
         assert_eq!(
             world
@@ -274,8 +292,10 @@ mod test {
         world.delete(e1);
 
         // Run the system on it
-        systems[0].run(&resources, &mut world);
-        systems[0].command_buffer_mut().write(&mut world);
+        for system in systems.iter() {
+            system.run(&resources, &mut world);
+            system.command_buffer_mut().write(&mut world);
+        }
 
         assert_eq!(
             world
@@ -296,15 +316,15 @@ mod test {
         let mut world = Universe::new().create_world();
         let resources = Resources::default();
 
-        let systems = TransformSystemBundle::default().build(&mut world);
+        let systems = ParentSystemBundle::default().build(&mut world);
 
         // Add 3 entities
         let entities = world.insert(
             (),
             vec![
-                (TransformSimilarity3::identity(),),
-                (TransformSimilarity3::identity(),),
-                (TransformSimilarity3::identity(),),
+                (TTranslation::identity(),),
+                (TTranslation::identity(),),
+                (TTranslation::identity(),),
             ],
         );
         let (parent, e1, e2) = (entities[0], entities[1], entities[2]);
@@ -314,9 +334,10 @@ mod test {
         world.add_component(e2, Parent::new(parent));
 
         // Run the systems on it
-        systems[0].run(&resources, &mut world);
-        systems[0].command_buffer_mut().write(&mut world);
-        TransformSystemBundle::set_depths_system(&mut world);
+        for system in systems.iter() {
+            system.run(&resources, &mut world);
+            system.command_buffer_mut().write(&mut world);
+        }
 
         // Both should be at a depth of 1.
         assert_eq!(*world.get_tag::<DepthTag>(e1).unwrap(), DepthTag(1));
@@ -326,11 +347,10 @@ mod test {
         (*world.get_component_mut::<Parent>(e2).unwrap()).entity = e1;
 
         // Run the systems on it
-
-        systems[0].run(&resources, &mut world);
-        systems[0].command_buffer_mut().write(&mut world);
-
-        TransformSystemBundle::set_depths_system(&mut world);
+        for system in systems.iter() {
+            system.run(&resources, &mut world);
+            system.command_buffer_mut().write(&mut world);
+        }
 
         // This fails because Legion is not correctly mutating Tags.
         assert_eq!(*world.get_tag::<DepthTag>(e1).unwrap(), DepthTag(1));
