@@ -2,153 +2,107 @@
 use crate::{components::*, ecs::prelude::*, math::Matrix4};
 
 #[derive(Default)]
-pub struct LocalToWorldSystem;
-impl LocalToWorldSystem {
+pub struct LocalToParentSystem;
+impl LocalToParentSystem {
     pub fn build(&mut self) -> Box<dyn Schedulable> {
-        SystemBuilder::<()>::new("LocalToWorldUpdateSystem")
+        SystemBuilder::<()>::new("LocalToParentUpdateSystem")
             // Translation
-            .with_query(<(Write<LocalToWorld>, Read<Translation>)>::query().filter(
-                !component::<Parent>()
-                    & !component::<Rotation>()
-                    & !component::<Scale>()
-                    & !component::<NonUniformScale>()
-                    & (changed::<Translation>()),
+            .with_query(<(Write<LocalToParent>, Read<Translation>)>::query().filter(
+                !component::<Rotation>() & !component::<Scale>() & !component::<NonUniformScale>(),
             ))
             // Rotation
-            .with_query(<(Write<LocalToWorld>, Read<Rotation>)>::query().filter(
-                !component::<Parent>()
-                    & !component::<Translation>()
+            .with_query(<(Write<LocalToParent>, Read<Rotation>)>::query().filter(
+                !component::<Translation>()
                     & !component::<Scale>()
-                    & !component::<NonUniformScale>()
-                    & (changed::<Rotation>()),
+                    & !component::<NonUniformScale>(),
             ))
             // Scale
-            .with_query(<(Write<LocalToWorld>, Read<Scale>)>::query().filter(
-                !component::<Parent>()
-                    & !component::<Translation>()
+            .with_query(<(Write<LocalToParent>, Read<Scale>)>::query().filter(
+                !component::<Translation>()
                     & !component::<Rotation>()
-                    & !component::<NonUniformScale>()
-                    & (changed::<Scale>()),
+                    & !component::<NonUniformScale>(),
             ))
             // NonUniformScale
             .with_query(
-                <(Write<LocalToWorld>, Read<NonUniformScale>)>::query().filter(
-                    !component::<Parent>()
-                        & !component::<Translation>()
-                        & !component::<Rotation>()
-                        & !component::<Scale>()
-                        & (changed::<NonUniformScale>()),
+                <(Write<LocalToParent>, Read<NonUniformScale>)>::query().filter(
+                    !component::<Translation>() & !component::<Rotation>() & !component::<Scale>(),
                 ),
             )
             // Translation + Rotation
             .with_query(
-                <(Write<LocalToWorld>, Read<Translation>, Read<Rotation>)>::query().filter(
-                    !component::<Parent>()
-                        & !component::<Scale>()
-                        & !component::<NonUniformScale>()
-                        & (changed::<Translation>() | changed::<Rotation>()),
-                ),
+                <(Write<LocalToParent>, Read<Translation>, Read<Rotation>)>::query()
+                    .filter(!component::<Scale>() & !component::<NonUniformScale>()),
             )
             // Translation + Scale
             .with_query(
-                <(Write<LocalToWorld>, Read<Translation>, Read<Scale>)>::query().filter(
-                    !component::<Parent>()
-                        & !component::<Rotation>()
-                        & !component::<NonUniformScale>()
-                        & (changed::<Translation>() | changed::<Scale>()),
-                ),
+                <(Write<LocalToParent>, Read<Translation>, Read<Scale>)>::query()
+                    .filter(!component::<Rotation>() & !component::<NonUniformScale>()),
             )
             // Translation + NonUniformScale
             .with_query(
                 <(
-                    Write<LocalToWorld>,
+                    Write<LocalToParent>,
                     Read<Translation>,
                     Read<NonUniformScale>,
                 )>::query()
-                .filter(
-                    !component::<Parent>()
-                        & !component::<Rotation>()
-                        & !component::<Scale>()
-                        & (changed::<Translation>() | changed::<NonUniformScale>()),
-                ),
+                .filter(!component::<Rotation>() & !component::<Scale>()),
             )
             // Rotation + Scale
             .with_query(
-                <(Write<LocalToWorld>, Read<Rotation>, Read<Scale>)>::query().filter(
-                    !component::<Parent>()
-                        & !component::<Translation>()
-                        & !component::<NonUniformScale>()
-                        & (changed::<Rotation>() | changed::<Scale>()),
-                ),
+                <(Write<LocalToParent>, Read<Rotation>, Read<Scale>)>::query()
+                    .filter(!component::<Translation>() & !component::<NonUniformScale>()),
             )
             // Rotation + NonUniformScale
             .with_query(
-                <(Write<LocalToWorld>, Read<Rotation>, Read<NonUniformScale>)>::query().filter(
-                    !component::<Parent>()
-                        & !component::<Translation>()
-                        & !component::<Scale>()
-                        & (changed::<Rotation>() | changed::<NonUniformScale>()),
-                ),
+                <(Write<LocalToParent>, Read<Rotation>, Read<NonUniformScale>)>::query()
+                    .filter(!component::<Translation>() & !component::<Scale>()),
             )
             // Translation + Rotation + Scale
             .with_query(
                 <(
-                    Write<LocalToWorld>,
+                    Write<LocalToParent>,
                     Read<Translation>,
                     Read<Rotation>,
                     Read<Scale>,
                 )>::query()
-                .filter(
-                    !component::<Parent>()
-                        & !component::<NonUniformScale>()
-                        & (changed::<Translation>() | changed::<Rotation>() | changed::<Scale>()),
-                ),
+                .filter(!component::<NonUniformScale>()),
             )
             // Translation + Rotation + NonUniformScale
             .with_query(
                 <(
-                    Write<LocalToWorld>,
+                    Write<LocalToParent>,
                     Read<Translation>,
                     Read<Rotation>,
                     Read<NonUniformScale>,
                 )>::query()
-                .filter(
-                    !component::<Parent>()
-                        & !component::<Scale>()
-                        & (changed::<Translation>()
-                            | changed::<Rotation>()
-                            | changed::<NonUniformScale>()),
-                ),
+                .filter(!component::<Scale>()),
             )
             // Just to issue warnings: Scale + NonUniformScale
-            .with_query(
-                <(Read<LocalToWorld>, Read<Scale>, Read<NonUniformScale>)>::query()
-                    .filter(!component::<Parent>()),
-            )
+            .with_query(<(Read<LocalToParent>, Read<Scale>, Read<NonUniformScale>)>::query())
             .build(move |_commands, _world, _, queries| {
                 // Translation
                 queries.0.par_for_each(|(mut ltw, translation)| {
-                    *ltw = LocalToWorld(translation.to_homogeneous());
+                    *ltw = LocalToParent(translation.to_homogeneous());
                 });
 
                 // Rotation
                 queries.1.par_for_each(|(mut ltw, rotation)| {
-                    *ltw = LocalToWorld(rotation.to_homogeneous());
+                    *ltw = LocalToParent(rotation.to_homogeneous());
                 });
 
                 // Scale
                 queries.2.par_for_each(|(mut ltw, scale)| {
-                    *ltw = LocalToWorld(Matrix4::new_scaling(scale.0));
+                    *ltw = LocalToParent(Matrix4::new_scaling(scale.0));
                 });
 
                 // NonUniformScale
                 queries.3.par_for_each(|(mut ltw, non_uniform_scale)| {
-                    *ltw = LocalToWorld(Matrix4::new_nonuniform_scaling(&non_uniform_scale.0));
+                    *ltw = LocalToParent(Matrix4::new_nonuniform_scaling(&non_uniform_scale.0));
                 });
 
                 // Translation + Rotation
                 queries.4.par_for_each(|(mut ltw, translation, rotation)| {
-                    *ltw = LocalToWorld(
+                    *ltw = LocalToParent(
                         rotation
                             .to_homogeneous()
                             .append_translation(&translation.vector),
@@ -157,14 +111,14 @@ impl LocalToWorldSystem {
 
                 // Translation + Scale
                 queries.5.par_for_each(|(mut ltw, translation, scale)| {
-                    *ltw = LocalToWorld(translation.to_homogeneous().prepend_scaling(scale.0));
+                    *ltw = LocalToParent(translation.to_homogeneous().prepend_scaling(scale.0));
                 });
 
                 // Translation + NonUniformScale
                 queries
                     .6
                     .par_for_each(|(mut ltw, translation, non_uniform_scale)| {
-                        *ltw = LocalToWorld(
+                        *ltw = LocalToParent(
                             translation
                                 .to_homogeneous()
                                 .prepend_nonuniform_scaling(&non_uniform_scale.0),
@@ -173,14 +127,14 @@ impl LocalToWorldSystem {
 
                 // Rotation + Scale
                 queries.7.par_for_each(|(mut ltw, rotation, scale)| {
-                    *ltw = LocalToWorld(rotation.to_homogeneous().prepend_scaling(scale.0));
+                    *ltw = LocalToParent(rotation.to_homogeneous().prepend_scaling(scale.0));
                 });
 
                 // Rotation + NonUniformScale
                 queries
                     .8
                     .par_for_each(|(mut ltw, rotation, non_uniform_scale)| {
-                        *ltw = LocalToWorld(
+                        *ltw = LocalToParent(
                             rotation
                                 .to_homogeneous()
                                 .prepend_nonuniform_scaling(&non_uniform_scale.0),
@@ -191,7 +145,7 @@ impl LocalToWorldSystem {
                 queries
                     .9
                     .par_for_each(|(mut ltw, translation, rotation, scale)| {
-                        *ltw = LocalToWorld(
+                        *ltw = LocalToParent(
                             rotation
                                 .to_homogeneous()
                                 .append_translation(&translation.vector)
@@ -203,7 +157,7 @@ impl LocalToWorldSystem {
                 queries
                     .10
                     .par_for_each(|(mut ltw, translation, rotation, non_uniform_scale)| {
-                        *ltw = LocalToWorld(
+                        *ltw = LocalToParent(
                             rotation
                                 .to_homogeneous()
                                 .append_translation(&translation.vector)
@@ -229,13 +183,13 @@ mod test {
     use super::*;
 
     #[test]
-    fn correct_world_transformation() {
+    fn correct_parent_transformation() {
         let _ = env_logger::builder().is_test(true).try_init();
 
         let mut world = Universe::new().create_world();
-        let system = LocalToWorldSystem::default().build();
+        let system = LocalToParentSystem::default().build();
 
-        let ltw = LocalToWorld::identity();
+        let ltw = LocalToParent::identity();
         let t = Translation::new(1.0, 2.0, 3.0);
         let r = Rotation::from_euler_angles(1.0, 2.0, 3.0);
         let s = Scale(2.0);
@@ -260,59 +214,62 @@ mod test {
 
         // Verify that each was transformed correctly.
         assert_eq!(
-            world.get_component::<LocalToWorld>(translation).unwrap().0,
+            world.get_component::<LocalToParent>(translation).unwrap().0,
             t.to_homogeneous()
         );
         assert_eq!(
-            world.get_component::<LocalToWorld>(rotation).unwrap().0,
+            world.get_component::<LocalToParent>(rotation).unwrap().0,
             r.to_homogeneous()
         );
         assert_eq!(
-            world.get_component::<LocalToWorld>(scale).unwrap().0,
+            world.get_component::<LocalToParent>(scale).unwrap().0,
             Matrix4::new_scaling(s.0),
         );
         assert_eq!(
             world
-                .get_component::<LocalToWorld>(non_uniform_scale)
+                .get_component::<LocalToParent>(non_uniform_scale)
                 .unwrap()
                 .0,
             Matrix4::new_nonuniform_scaling(&nus.0),
         );
         assert_eq!(
             world
-                .get_component::<LocalToWorld>(translation_and_rotation)
+                .get_component::<LocalToParent>(translation_and_rotation)
                 .unwrap()
                 .0,
             r.to_homogeneous().append_translation(&t.vector),
         );
         assert_eq!(
             world
-                .get_component::<LocalToWorld>(translation_and_scale)
+                .get_component::<LocalToParent>(translation_and_scale)
                 .unwrap()
                 .0,
             t.to_homogeneous().prepend_scaling(s.0),
         );
         assert_eq!(
             world
-                .get_component::<LocalToWorld>(translation_and_nus)
+                .get_component::<LocalToParent>(translation_and_nus)
                 .unwrap()
                 .0,
             t.to_homogeneous().prepend_nonuniform_scaling(&nus.0),
         );
         assert_eq!(
             world
-                .get_component::<LocalToWorld>(rotation_scale)
+                .get_component::<LocalToParent>(rotation_scale)
                 .unwrap()
                 .0,
             r.to_homogeneous().prepend_scaling(s.0)
         );
         assert_eq!(
-            world.get_component::<LocalToWorld>(rotation_nus).unwrap().0,
+            world
+                .get_component::<LocalToParent>(rotation_nus)
+                .unwrap()
+                .0,
             r.to_homogeneous().prepend_nonuniform_scaling(&nus.0)
         );
         assert_eq!(
             world
-                .get_component::<LocalToWorld>(translation_rotation_scale)
+                .get_component::<LocalToParent>(translation_rotation_scale)
                 .unwrap()
                 .0,
             r.to_homogeneous()
@@ -321,7 +278,7 @@ mod test {
         );
         assert_eq!(
             world
-                .get_component::<LocalToWorld>(translation_rotation_nus)
+                .get_component::<LocalToParent>(translation_rotation_nus)
                 .unwrap()
                 .0,
             r.to_homogeneous()

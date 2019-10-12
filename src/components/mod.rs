@@ -1,7 +1,17 @@
 mod children;
+mod local_to_parent;
+mod local_to_world;
+mod non_uniform_scale;
 mod parent;
-mod transform;
+mod rotation;
+mod scale;
+mod translation;
 
 pub use children::Children;
-pub use parent::Parent;
-pub use transform::*;
+pub use local_to_parent::*;
+pub use local_to_world::*;
+pub use non_uniform_scale::*;
+pub use parent::{Parent, PreviousParent};
+pub use rotation::*;
+pub use scale::*;
+pub use translation::*;
