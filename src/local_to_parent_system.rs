@@ -1,181 +1,175 @@
 #![allow(dead_code)]
 use crate::{components::*, ecs::prelude::*, math::Matrix4};
 
-#[derive(Default)]
-pub struct LocalToParentSystem;
-impl LocalToParentSystem {
-    pub fn build(&mut self) -> Box<dyn Schedulable> {
-        SystemBuilder::<()>::new("LocalToParentUpdateSystem")
+pub fn build(_: &mut World) -> Box<dyn Schedulable> {
+    SystemBuilder::<()>::new("LocalToParentUpdateSystem")
+        // Translation
+        .with_query(<(Write<LocalToParent>, Read<Translation>)>::query().filter(
+            !component::<Rotation>() & !component::<Scale>() & !component::<NonUniformScale>(),
+        ))
+        // Rotation
+        .with_query(<(Write<LocalToParent>, Read<Rotation>)>::query().filter(
+            !component::<Translation>() & !component::<Scale>() & !component::<NonUniformScale>(),
+        ))
+        // Scale
+        .with_query(<(Write<LocalToParent>, Read<Scale>)>::query().filter(
+            !component::<Translation>()
+                & !component::<Rotation>()
+                & !component::<NonUniformScale>(),
+        ))
+        // NonUniformScale
+        .with_query(
+            <(Write<LocalToParent>, Read<NonUniformScale>)>::query().filter(
+                !component::<Translation>() & !component::<Rotation>() & !component::<Scale>(),
+            ),
+        )
+        // Translation + Rotation
+        .with_query(
+            <(Write<LocalToParent>, Read<Translation>, Read<Rotation>)>::query()
+                .filter(!component::<Scale>() & !component::<NonUniformScale>()),
+        )
+        // Translation + Scale
+        .with_query(
+            <(Write<LocalToParent>, Read<Translation>, Read<Scale>)>::query()
+                .filter(!component::<Rotation>() & !component::<NonUniformScale>()),
+        )
+        // Translation + NonUniformScale
+        .with_query(
+            <(
+                Write<LocalToParent>,
+                Read<Translation>,
+                Read<NonUniformScale>,
+            )>::query()
+            .filter(!component::<Rotation>() & !component::<Scale>()),
+        )
+        // Rotation + Scale
+        .with_query(
+            <(Write<LocalToParent>, Read<Rotation>, Read<Scale>)>::query()
+                .filter(!component::<Translation>() & !component::<NonUniformScale>()),
+        )
+        // Rotation + NonUniformScale
+        .with_query(
+            <(Write<LocalToParent>, Read<Rotation>, Read<NonUniformScale>)>::query()
+                .filter(!component::<Translation>() & !component::<Scale>()),
+        )
+        // Translation + Rotation + Scale
+        .with_query(
+            <(
+                Write<LocalToParent>,
+                Read<Translation>,
+                Read<Rotation>,
+                Read<Scale>,
+            )>::query()
+            .filter(!component::<NonUniformScale>()),
+        )
+        // Translation + Rotation + NonUniformScale
+        .with_query(
+            <(
+                Write<LocalToParent>,
+                Read<Translation>,
+                Read<Rotation>,
+                Read<NonUniformScale>,
+            )>::query()
+            .filter(!component::<Scale>()),
+        )
+        // Just to issue warnings: Scale + NonUniformScale
+        .with_query(<(Read<LocalToParent>, Read<Scale>, Read<NonUniformScale>)>::query())
+        .build(move |_commands, _world, _, queries| {
             // Translation
-            .with_query(<(Write<LocalToParent>, Read<Translation>)>::query().filter(
-                !component::<Rotation>() & !component::<Scale>() & !component::<NonUniformScale>(),
-            ))
+            queries.0.par_for_each(|(mut ltw, translation)| {
+                *ltw = LocalToParent(translation.to_homogeneous());
+            });
+
             // Rotation
-            .with_query(<(Write<LocalToParent>, Read<Rotation>)>::query().filter(
-                !component::<Translation>()
-                    & !component::<Scale>()
-                    & !component::<NonUniformScale>(),
-            ))
+            queries.1.par_for_each(|(mut ltw, rotation)| {
+                *ltw = LocalToParent(rotation.to_homogeneous());
+            });
+
             // Scale
-            .with_query(<(Write<LocalToParent>, Read<Scale>)>::query().filter(
-                !component::<Translation>()
-                    & !component::<Rotation>()
-                    & !component::<NonUniformScale>(),
-            ))
+            queries.2.par_for_each(|(mut ltw, scale)| {
+                *ltw = LocalToParent(Matrix4::new_scaling(scale.0));
+            });
+
             // NonUniformScale
-            .with_query(
-                <(Write<LocalToParent>, Read<NonUniformScale>)>::query().filter(
-                    !component::<Translation>() & !component::<Rotation>() & !component::<Scale>(),
-                ),
-            )
+            queries.3.par_for_each(|(mut ltw, non_uniform_scale)| {
+                *ltw = LocalToParent(Matrix4::new_nonuniform_scaling(&non_uniform_scale.0));
+            });
+
             // Translation + Rotation
-            .with_query(
-                <(Write<LocalToParent>, Read<Translation>, Read<Rotation>)>::query()
-                    .filter(!component::<Scale>() & !component::<NonUniformScale>()),
-            )
+            queries.4.par_for_each(|(mut ltw, translation, rotation)| {
+                *ltw = LocalToParent(
+                    rotation
+                        .to_homogeneous()
+                        .append_translation(&translation.vector),
+                );
+            });
+
             // Translation + Scale
-            .with_query(
-                <(Write<LocalToParent>, Read<Translation>, Read<Scale>)>::query()
-                    .filter(!component::<Rotation>() & !component::<NonUniformScale>()),
-            )
+            queries.5.par_for_each(|(mut ltw, translation, scale)| {
+                *ltw = LocalToParent(translation.to_homogeneous().prepend_scaling(scale.0));
+            });
+
             // Translation + NonUniformScale
-            .with_query(
-                <(
-                    Write<LocalToParent>,
-                    Read<Translation>,
-                    Read<NonUniformScale>,
-                )>::query()
-                .filter(!component::<Rotation>() & !component::<Scale>()),
-            )
-            // Rotation + Scale
-            .with_query(
-                <(Write<LocalToParent>, Read<Rotation>, Read<Scale>)>::query()
-                    .filter(!component::<Translation>() & !component::<NonUniformScale>()),
-            )
-            // Rotation + NonUniformScale
-            .with_query(
-                <(Write<LocalToParent>, Read<Rotation>, Read<NonUniformScale>)>::query()
-                    .filter(!component::<Translation>() & !component::<Scale>()),
-            )
-            // Translation + Rotation + Scale
-            .with_query(
-                <(
-                    Write<LocalToParent>,
-                    Read<Translation>,
-                    Read<Rotation>,
-                    Read<Scale>,
-                )>::query()
-                .filter(!component::<NonUniformScale>()),
-            )
-            // Translation + Rotation + NonUniformScale
-            .with_query(
-                <(
-                    Write<LocalToParent>,
-                    Read<Translation>,
-                    Read<Rotation>,
-                    Read<NonUniformScale>,
-                )>::query()
-                .filter(!component::<Scale>()),
-            )
-            // Just to issue warnings: Scale + NonUniformScale
-            .with_query(<(Read<LocalToParent>, Read<Scale>, Read<NonUniformScale>)>::query())
-            .build(move |_commands, _world, _, queries| {
-                // Translation
-                queries.0.par_for_each(|(mut ltw, translation)| {
-                    *ltw = LocalToParent(translation.to_homogeneous());
-                });
-
-                // Rotation
-                queries.1.par_for_each(|(mut ltw, rotation)| {
-                    *ltw = LocalToParent(rotation.to_homogeneous());
-                });
-
-                // Scale
-                queries.2.par_for_each(|(mut ltw, scale)| {
-                    *ltw = LocalToParent(Matrix4::new_scaling(scale.0));
-                });
-
-                // NonUniformScale
-                queries.3.par_for_each(|(mut ltw, non_uniform_scale)| {
-                    *ltw = LocalToParent(Matrix4::new_nonuniform_scaling(&non_uniform_scale.0));
-                });
-
-                // Translation + Rotation
-                queries.4.par_for_each(|(mut ltw, translation, rotation)| {
+            queries
+                .6
+                .par_for_each(|(mut ltw, translation, non_uniform_scale)| {
                     *ltw = LocalToParent(
-                        rotation
+                        translation
                             .to_homogeneous()
-                            .append_translation(&translation.vector),
+                            .prepend_nonuniform_scaling(&non_uniform_scale.0),
                     );
                 });
 
-                // Translation + Scale
-                queries.5.par_for_each(|(mut ltw, translation, scale)| {
-                    *ltw = LocalToParent(translation.to_homogeneous().prepend_scaling(scale.0));
+            // Rotation + Scale
+            queries.7.par_for_each(|(mut ltw, rotation, scale)| {
+                *ltw = LocalToParent(rotation.to_homogeneous().prepend_scaling(scale.0));
+            });
+
+            // Rotation + NonUniformScale
+            queries
+                .8
+                .par_for_each(|(mut ltw, rotation, non_uniform_scale)| {
+                    *ltw = LocalToParent(
+                        rotation
+                            .to_homogeneous()
+                            .prepend_nonuniform_scaling(&non_uniform_scale.0),
+                    );
                 });
 
-                // Translation + NonUniformScale
-                queries
-                    .6
-                    .par_for_each(|(mut ltw, translation, non_uniform_scale)| {
-                        *ltw = LocalToParent(
-                            translation
-                                .to_homogeneous()
-                                .prepend_nonuniform_scaling(&non_uniform_scale.0),
-                        );
-                    });
-
-                // Rotation + Scale
-                queries.7.par_for_each(|(mut ltw, rotation, scale)| {
-                    *ltw = LocalToParent(rotation.to_homogeneous().prepend_scaling(scale.0));
+            // Translation + Rotation + Scale
+            queries
+                .9
+                .par_for_each(|(mut ltw, translation, rotation, scale)| {
+                    *ltw = LocalToParent(
+                        rotation
+                            .to_homogeneous()
+                            .append_translation(&translation.vector)
+                            .prepend_scaling(scale.0),
+                    );
                 });
 
-                // Rotation + NonUniformScale
-                queries
-                    .8
-                    .par_for_each(|(mut ltw, rotation, non_uniform_scale)| {
-                        *ltw = LocalToParent(
-                            rotation
-                                .to_homogeneous()
-                                .prepend_nonuniform_scaling(&non_uniform_scale.0),
-                        );
-                    });
+            // Translation + Rotation + NonUniformScale
+            queries
+                .10
+                .par_for_each(|(mut ltw, translation, rotation, non_uniform_scale)| {
+                    *ltw = LocalToParent(
+                        rotation
+                            .to_homogeneous()
+                            .append_translation(&translation.vector)
+                            .prepend_nonuniform_scaling(&non_uniform_scale.0),
+                    );
+                });
 
-                // Translation + Rotation + Scale
-                queries
-                    .9
-                    .par_for_each(|(mut ltw, translation, rotation, scale)| {
-                        *ltw = LocalToParent(
-                            rotation
-                                .to_homogeneous()
-                                .append_translation(&translation.vector)
-                                .prepend_scaling(scale.0),
-                        );
-                    });
-
-                // Translation + Rotation + NonUniformScale
-                queries
-                    .10
-                    .par_for_each(|(mut ltw, translation, rotation, non_uniform_scale)| {
-                        *ltw = LocalToParent(
-                            rotation
-                                .to_homogeneous()
-                                .append_translation(&translation.vector)
-                                .prepend_nonuniform_scaling(&non_uniform_scale.0),
-                        );
-                    });
-
-                // Just to issue warnings: Scale + NonUniformScale
-                queries.11.iter_entities().for_each(
-                    |(entity, (mut _ltw, _scale, _non_uniform_scale))| {
-                        log::warn!(
-                            "Entity {:?} has both a Scale and NonUniformScale component.",
-                            entity
-                        );
-                    },
-                );
-            })
-    }
+            // Just to issue warnings: Scale + NonUniformScale
+            queries.11.iter_entities().for_each(
+                |(entity, (mut _ltw, _scale, _non_uniform_scale))| {
+                    log::warn!(
+                        "Entity {:?} has both a Scale and NonUniformScale component.",
+                        entity
+                    );
+                },
+            );
+        })
 }
 
 #[cfg(test)]
@@ -187,7 +181,7 @@ mod test {
         let _ = env_logger::builder().is_test(true).try_init();
 
         let mut world = Universe::new().create_world();
-        let system = LocalToParentSystem::default().build();
+        let system = build(&mut world);
 
         let ltw = LocalToParent::identity();
         let t = Translation::new(1.0, 2.0, 3.0);

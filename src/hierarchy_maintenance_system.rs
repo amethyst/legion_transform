@@ -1,43 +1,41 @@
 #![allow(dead_code)]
 use crate::{components::*, ecs::prelude::*};
+use rayon::prelude::*;
 use smallvec::SmallVec;
 use std::collections::HashMap;
 
-#[derive(Default)]
-pub struct HierarchyMaintenanceSystem;
+pub fn build(_: &mut World) -> Vec<Box<dyn Schedulable>> {
+    let missing_previous_parent_system = SystemBuilder::<()>::new("MissingPreviousParentSystem")
+        // Entities with missing `PreviousParent`
+        .with_query(<Read<Parent>>::query().filter(
+            component::<LocalToParent>()
+                & component::<LocalToWorld>()
+                & !component::<PreviousParent>(),
+        ))
+        .build(move |commands, _world, _resource, query| {
+            // Add missing `PreviousParent` components
+            for (entity, _parent) in query.iter_entities() {
+                log::trace!("Adding missing PreviousParent to {}", entity);
+                commands.add_component(entity, PreviousParent(None));
+            }
+        });
 
-impl HierarchyMaintenanceSystem {
-    pub fn build(&mut self) -> Vec<Box<dyn Schedulable>> {
-        let missing_previous_parent_system =
-            SystemBuilder::<()>::new("MissingPreviousParentSystem")
-                // Entities with missing `PreviousParent`
-                .with_query(<Read<Parent>>::query().filter(
-                    component::<LocalToParent>()
-                        & component::<LocalToWorld>()
-                        & !component::<PreviousParent>(),
-                ))
-                .build(move |commands, _world, _resource, query| {
-                    // Add missing `PreviousParent` components
-                    for (entity, _parent) in query.iter_entities() {
-                        log::trace!("Adding missing PreviousParent to {}", entity);
-                        commands.add_component(entity, PreviousParent(None));
-                    }
-                });
-
-        let parent_update_system = SystemBuilder::<()>::new("ParentUpdateSystem")
-            // Entities with a removed `Parent`
-            .with_query(<Read<PreviousParent>>::query().filter(!component::<Parent>()))
-            // Entities with a changed `Parent`
-            .with_query(<(Read<Parent>, Write<PreviousParent>)>::query().filter(
-                component::<LocalToParent>() & component::<LocalToWorld>() & changed::<Parent>(),
-            ))
-            // Deleted Parents (ie Entities with `Children` and without a `LocalToWorld`).
-            .with_query(<Read<Children>>::query().filter(!component::<LocalToWorld>()))
-            .write_component::<Children>()
-            .build(move |commands, world, _resource, queries| {
-                // Entities with a missing `Parent` (ie. ones that have a `PreviousParent`), remove
-                // them from the `Children` of the `PreviousParent`.
-                for (entity, previous_parent) in queries.0.iter_entities() {
+    let parent_update_system = SystemBuilder::<()>::new("ParentUpdateSystem")
+        // Entities with a removed `Parent`
+        .with_query(<Read<PreviousParent>>::query().filter(!component::<Parent>()))
+        // Entities with a changed `Parent`
+        .with_query(<(Read<Parent>, Write<PreviousParent>)>::query().filter(
+            component::<LocalToParent>() & component::<LocalToWorld>() & changed::<Parent>(),
+        ))
+        // Deleted Parents (ie Entities with `Children` and without a `LocalToWorld`).
+        .with_query(<Read<Children>>::query().filter(!component::<LocalToWorld>()))
+        .write_component::<Children>()
+        .build(move |commands, world, _resource, queries| {
+            // Entities with a missing `Parent` (ie. ones that have a `PreviousParent`), remove
+            // them from the `Children` of the `PreviousParent`.
+            queries
+                .0
+                .par_entities_for_each(|(entity, previous_parent)| {
                     log::trace!("Parent was removed from {}", entity);
                     if let Some(previous_parent_entity) = previous_parent.0 {
                         if let Some(mut previous_parent_children) =
@@ -47,14 +45,21 @@ impl HierarchyMaintenanceSystem {
                             previous_parent_children.0.retain(|e| *e != entity);
                         }
                     }
-                }
+                });
 
-                // Tracks all newly created `Children` Components this frame.
-                let mut children_additions =
-                    HashMap::<Entity, SmallVec<[Entity; 8]>>::with_capacity(16);
+            // Tracks all newly created `Children` Components this frame.
+            // This could be parralelized a few ways, but i'm not sure if they would perform faster
+            // My first thought is to just dump all these into a SegQueue, and then sort them at the
+            // end and parraelize draining them
+            let mut children_additions =
+                HashMap::<Entity, SmallVec<[Entity; 8]>>::with_capacity(16);
 
-                // Entities with a changed Parent (that also have a PreviousParent, even if None)
-                for (entity, (parent, mut previous_parent)) in queries.1.iter_entities() {
+            // Entities with a changed Parent (that also have a PreviousParent, even if None)
+
+            queries
+                .1
+                .iter_entities()
+                .for_each(|(entity, (parent, mut previous_parent))| {
                     log::trace!("Parent changed for {}", entity);
 
                     // If the `PreviousParent` is not None.
@@ -62,7 +67,7 @@ impl HierarchyMaintenanceSystem {
                         // New and previous point to the same Entity, carry on, nothing to see here.
                         if previous_parent_entity == parent.0 {
                             log::trace!(" > But the previous parent is the same, ignoring...");
-                            continue;
+                            return;
                         }
 
                         // Remove from `PreviousParent.Children`.
@@ -100,35 +105,34 @@ impl HierarchyMaintenanceSystem {
                             .or_insert_with(Default::default)
                             .push(entity);
                     }
-                }
-
-                // Deleted `Parents` (ie. Entities with a `Children` but no `LocalToWorld`).
-                for (entity, children) in queries.2.iter_entities() {
-                    log::trace!("The entity {} doesn't have a LocalToWorld", entity);
-                    if children_additions.remove(&entity).is_none() {
-                        log::trace!(" > It needs to be remove from the ECS.");
-                        for child_entity in children.0.iter() {
-                            commands.remove_component::<Parent>(*child_entity);
-                            commands.remove_component::<PreviousParent>(*child_entity);
-                            commands.remove_component::<LocalToParent>(*child_entity);
-                        }
-                        commands.remove_component::<Children>(entity);
-                    } else {
-                        log::trace!(" > It was a new addition, removing it from additions map");
-                    }
-                }
-
-                // Flush the `children_additions` to the command buffer. It is stored separate to
-                // collect multiple new children that point to the same parent into the same
-                // SmallVec, and to prevent redundant add+remove operations.
-                children_additions.iter().for_each(|(k, v)| {
-                    log::trace!("Flushing: Entity {} adding `Children` component {:?}", k, v);
-                    commands.add_component(*k, Children::with(v));
                 });
-            });
 
-        vec![missing_previous_parent_system, parent_update_system]
-    }
+            // Deleted `Parents` (ie. Entities with a `Children` but no `LocalToWorld`).
+            for (entity, children) in queries.2.iter_entities() {
+                log::trace!("The entity {} doesn't have a LocalToWorld", entity);
+                if children_additions.remove(&entity).is_none() {
+                    log::trace!(" > It needs to be remove from the ECS.");
+                    for child_entity in children.0.iter() {
+                        commands.remove_component::<Parent>(*child_entity);
+                        commands.remove_component::<PreviousParent>(*child_entity);
+                        commands.remove_component::<LocalToParent>(*child_entity);
+                    }
+                    commands.remove_component::<Children>(entity);
+                } else {
+                    log::trace!(" > It was a new addition, removing it from additions map");
+                }
+            }
+
+            // Flush the `children_additions` to the command buffer. It is stored separate to
+            // collect multiple new children that point to the same parent into the same
+            // SmallVec, and to prevent redundant add+remove operations.
+            children_additions.par_iter().for_each(|(k, v)| {
+                log::trace!("Flushing: Entity {} adding `Children` component {:?}", k, v);
+                commands.add_component(*k, Children::with(v));
+            });
+        });
+
+    vec![missing_previous_parent_system, parent_update_system]
 }
 
 #[cfg(test)]
@@ -141,7 +145,7 @@ mod test {
 
         let mut world = Universe::new().create_world();
 
-        let systems = HierarchyMaintenanceSystem::default().build();
+        let systems = build(&mut world);
 
         // Add parent entities
         let parent = *world
