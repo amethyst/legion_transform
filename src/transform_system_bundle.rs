@@ -5,6 +5,7 @@ use crate::{
     local_to_world_system::LocalToWorldSystem,
 };
 
+#[derive(Default)]
 pub struct TransformSystemBundle;
 
 impl TransformSystemBundle {
