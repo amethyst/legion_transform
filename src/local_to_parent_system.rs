@@ -8,35 +8,49 @@ impl LocalToParentSystem {
         SystemBuilder::<()>::new("LocalToParentUpdateSystem")
             // Translation
             .with_query(<(Write<LocalToParent>, Read<Translation>)>::query().filter(
-                !component::<Rotation>() & !component::<Scale>() & !component::<NonUniformScale>(),
+                !component::<Rotation>()
+                    & !component::<Scale>()
+                    & !component::<NonUniformScale>()
+                    & (changed::<Translation>()),
             ))
             // Rotation
             .with_query(<(Write<LocalToParent>, Read<Rotation>)>::query().filter(
                 !component::<Translation>()
                     & !component::<Scale>()
-                    & !component::<NonUniformScale>(),
+                    & !component::<NonUniformScale>()
+                    & (changed::<Rotation>()),
             ))
             // Scale
             .with_query(<(Write<LocalToParent>, Read<Scale>)>::query().filter(
                 !component::<Translation>()
                     & !component::<Rotation>()
-                    & !component::<NonUniformScale>(),
+                    & !component::<NonUniformScale>()
+                    & (changed::<Scale>()),
             ))
             // NonUniformScale
             .with_query(
                 <(Write<LocalToParent>, Read<NonUniformScale>)>::query().filter(
-                    !component::<Translation>() & !component::<Rotation>() & !component::<Scale>(),
+                    !component::<Translation>()
+                        & !component::<Rotation>()
+                        & !component::<Scale>()
+                        & (changed::<NonUniformScale>()),
                 ),
             )
             // Translation + Rotation
             .with_query(
-                <(Write<LocalToParent>, Read<Translation>, Read<Rotation>)>::query()
-                    .filter(!component::<Scale>() & !component::<NonUniformScale>()),
+                <(Write<LocalToParent>, Read<Translation>, Read<Rotation>)>::query().filter(
+                    !component::<Scale>()
+                        & !component::<NonUniformScale>()
+                        & (changed::<Translation>() | changed::<Rotation>()),
+                ),
             )
             // Translation + Scale
             .with_query(
-                <(Write<LocalToParent>, Read<Translation>, Read<Scale>)>::query()
-                    .filter(!component::<Rotation>() & !component::<NonUniformScale>()),
+                <(Write<LocalToParent>, Read<Translation>, Read<Scale>)>::query().filter(
+                    !component::<Rotation>()
+                        & !component::<NonUniformScale>()
+                        & (changed::<Translation>() | changed::<Scale>()),
+                ),
             )
             // Translation + NonUniformScale
             .with_query(
@@ -45,17 +59,27 @@ impl LocalToParentSystem {
                     Read<Translation>,
                     Read<NonUniformScale>,
                 )>::query()
-                .filter(!component::<Rotation>() & !component::<Scale>()),
+                .filter(
+                    !component::<Rotation>()
+                        & !component::<Scale>()
+                        & (changed::<Translation>() | changed::<NonUniformScale>()),
+                ),
             )
             // Rotation + Scale
             .with_query(
-                <(Write<LocalToParent>, Read<Rotation>, Read<Scale>)>::query()
-                    .filter(!component::<Translation>() & !component::<NonUniformScale>()),
+                <(Write<LocalToParent>, Read<Rotation>, Read<Scale>)>::query().filter(
+                    !component::<Translation>()
+                        & !component::<NonUniformScale>()
+                        & (changed::<Rotation>() | changed::<Scale>()),
+                ),
             )
             // Rotation + NonUniformScale
             .with_query(
-                <(Write<LocalToParent>, Read<Rotation>, Read<NonUniformScale>)>::query()
-                    .filter(!component::<Translation>() & !component::<Scale>()),
+                <(Write<LocalToParent>, Read<Rotation>, Read<NonUniformScale>)>::query().filter(
+                    !component::<Translation>()
+                        & !component::<Scale>()
+                        & (changed::<Rotation>() | changed::<NonUniformScale>()),
+                ),
             )
             // Translation + Rotation + Scale
             .with_query(
@@ -65,7 +89,10 @@ impl LocalToParentSystem {
                     Read<Rotation>,
                     Read<Scale>,
                 )>::query()
-                .filter(!component::<NonUniformScale>()),
+                .filter(
+                    !component::<NonUniformScale>()
+                        & (changed::<Translation>() | changed::<Rotation>() | changed::<Scale>()),
+                ),
             )
             // Translation + Rotation + NonUniformScale
             .with_query(
@@ -75,7 +102,12 @@ impl LocalToParentSystem {
                     Read<Rotation>,
                     Read<NonUniformScale>,
                 )>::query()
-                .filter(!component::<Scale>()),
+                .filter(
+                    !component::<Scale>()
+                        & (changed::<Translation>()
+                            | changed::<Rotation>()
+                            | changed::<NonUniformScale>()),
+                ),
             )
             // Just to issue warnings: Scale + NonUniformScale
             .with_query(<(Read<LocalToParent>, Read<Scale>, Read<NonUniformScale>)>::query())
