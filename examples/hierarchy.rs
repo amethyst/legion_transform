@@ -10,7 +10,7 @@ fn tldr_sample() {
     let mut world = Universe::default().create_world();
 
     // Create a system bundle (vec of systems) for LegionTransform
-    let transform_system_bundle = TransformSystemBundle::default().build();
+    let transform_system_bundle = transform_system_bundle::build(&mut world);
 
     let parent_entity = *world
         .insert(
@@ -50,7 +50,7 @@ fn main() {
     let mut world = Universe::default().create_world();
 
     // Create a system bundle (vec of systems) for LegionTransform
-    let transform_system_bundle = TransformSystemBundle::default().build();
+    let transform_system_bundle = transform_system_bundle::build(&mut world);
 
     // See `./types_of_transforms.rs` for an explanation of space-transform types.
     let parent_entity = *world

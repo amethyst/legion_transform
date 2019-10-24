@@ -9,7 +9,7 @@ fn main() {
     let mut world = Universe::default().create_world();
 
     // Create a system bundle (vec of systems) for LegionTransform
-    let transform_system_bundle = TransformSystemBundle::default().build();
+    let transform_system_bundle = transform_system_bundle::build(&mut world);
 
     // A user-defined space transform is split into 4 different components: [`Translation`,
     // `Rotation`, `Scale`, `NonUniformScale`]. Any combination of these components can be added to
