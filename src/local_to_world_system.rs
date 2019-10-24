@@ -126,100 +126,109 @@ impl LocalToWorldSystem {
                     .filter(!component::<Parent>()),
             )
             .build(move |_commands, _world, _, queries| {
-                // Translation
-                queries.0.for_each(|(mut ltw, translation)| {
-                    *ltw = LocalToWorld(translation.to_homogeneous());
-                });
+                let (a, b, c, d, e, f, g, h, i, j, k, l) = queries;
+                rayon::scope(|s| {
+                    s.spawn(|_| {
+                        // Translation
+                        a.for_each(|(mut ltw, translation)| {
+                            *ltw = LocalToWorld(translation.to_homogeneous());
+                        });
+                    });
+                    s.spawn(|_| {
+                        // Rotation
+                        b.for_each(|(mut ltw, rotation)| {
+                            *ltw = LocalToWorld(rotation.to_homogeneous());
+                        });
+                    });
+                    s.spawn(|_| {
+                        // Scale
+                        c.for_each(|(mut ltw, scale)| {
+                            *ltw = LocalToWorld(Matrix4::new_scaling(scale.0));
+                        });
+                    });
+                    s.spawn(|_| {
+                        // NonUniformScale
+                        d.for_each(|(mut ltw, non_uniform_scale)| {
+                            *ltw =
+                                LocalToWorld(Matrix4::new_nonuniform_scaling(&non_uniform_scale.0));
+                        });
+                    });
+                    s.spawn(|_| {
+                        // Translation + Rotation
+                        e.for_each(|(mut ltw, translation, rotation)| {
+                            *ltw = LocalToWorld(
+                                rotation
+                                    .to_homogeneous()
+                                    .append_translation(&translation.vector),
+                            );
+                        });
+                    });
+                    s.spawn(|_| {
+                        // Translation + Scale
+                        f.for_each(|(mut ltw, translation, scale)| {
+                            *ltw =
+                                LocalToWorld(translation.to_homogeneous().prepend_scaling(scale.0));
+                        });
+                    });
+                    s.spawn(|_| {
+                        // Translation + NonUniformScale
+                        g.for_each(|(mut ltw, translation, non_uniform_scale)| {
+                            *ltw = LocalToWorld(
+                                translation
+                                    .to_homogeneous()
+                                    .prepend_nonuniform_scaling(&non_uniform_scale.0),
+                            );
+                        });
+                    });
+                    s.spawn(|_| {
+                        // Rotation + Scale
+                        h.for_each(|(mut ltw, rotation, scale)| {
+                            *ltw = LocalToWorld(rotation.to_homogeneous().prepend_scaling(scale.0));
+                        });
+                    });
+                    s.spawn(|_| {
+                        // Rotation + NonUniformScale
+                        i.for_each(|(mut ltw, rotation, non_uniform_scale)| {
+                            *ltw = LocalToWorld(
+                                rotation
+                                    .to_homogeneous()
+                                    .prepend_nonuniform_scaling(&non_uniform_scale.0),
+                            );
+                        });
+                    });
+                    s.spawn(|_| {
+                        // Translation + Rotation + Scale
+                        j.for_each(|(mut ltw, translation, rotation, scale)| {
+                            *ltw = LocalToWorld(
+                                rotation
+                                    .to_homogeneous()
+                                    .append_translation(&translation.vector)
+                                    .prepend_scaling(scale.0),
+                            );
+                        });
+                    });
+                    s.spawn(|_| {
+                        // Translation + Rotation + NonUniformScale
+                        k.for_each(|(mut ltw, translation, rotation, non_uniform_scale)| {
+                            *ltw = LocalToWorld(
+                                rotation
+                                    .to_homogeneous()
+                                    .append_translation(&translation.vector)
+                                    .prepend_nonuniform_scaling(&non_uniform_scale.0),
+                            );
+                        });
+                    });
 
-                // Rotation
-                queries.1.for_each(|(mut ltw, rotation)| {
-                    *ltw = LocalToWorld(rotation.to_homogeneous());
-                });
-
-                // Scale
-                queries.2.for_each(|(mut ltw, scale)| {
-                    *ltw = LocalToWorld(Matrix4::new_scaling(scale.0));
-                });
-
-                // NonUniformScale
-                queries.3.for_each(|(mut ltw, non_uniform_scale)| {
-                    *ltw = LocalToWorld(Matrix4::new_nonuniform_scaling(&non_uniform_scale.0));
-                });
-
-                // Translation + Rotation
-                queries.4.for_each(|(mut ltw, translation, rotation)| {
-                    *ltw = LocalToWorld(
-                        rotation
-                            .to_homogeneous()
-                            .append_translation(&translation.vector),
+                    // Just to issue warnings: Scale + NonUniformScale
+                    l.iter_entities().for_each(
+                        |(entity, (mut _ltw, _scale, _non_uniform_scale))| {
+                            log::warn!(
+                                "Entity {:?} has both a Scale and NonUniformScale component.",
+                                entity
+                            );
+                        },
                     );
                 });
-
-                // Translation + Scale
-                queries.5.for_each(|(mut ltw, translation, scale)| {
-                    *ltw = LocalToWorld(translation.to_homogeneous().prepend_scaling(scale.0));
-                });
-
-                // Translation + NonUniformScale
-                queries
-                    .6
-                    .for_each(|(mut ltw, translation, non_uniform_scale)| {
-                        *ltw = LocalToWorld(
-                            translation
-                                .to_homogeneous()
-                                .prepend_nonuniform_scaling(&non_uniform_scale.0),
-                        );
-                    });
-
-                // Rotation + Scale
-                queries.7.for_each(|(mut ltw, rotation, scale)| {
-                    *ltw = LocalToWorld(rotation.to_homogeneous().prepend_scaling(scale.0));
-                });
-
-                // Rotation + NonUniformScale
-                queries
-                    .8
-                    .for_each(|(mut ltw, rotation, non_uniform_scale)| {
-                        *ltw = LocalToWorld(
-                            rotation
-                                .to_homogeneous()
-                                .prepend_nonuniform_scaling(&non_uniform_scale.0),
-                        );
-                    });
-
-                // Translation + Rotation + Scale
-                queries
-                    .9
-                    .for_each(|(mut ltw, translation, rotation, scale)| {
-                        *ltw = LocalToWorld(
-                            rotation
-                                .to_homogeneous()
-                                .append_translation(&translation.vector)
-                                .prepend_scaling(scale.0),
-                        );
-                    });
-
-                // Translation + Rotation + NonUniformScale
-                queries
-                    .10
-                    .for_each(|(mut ltw, translation, rotation, non_uniform_scale)| {
-                        *ltw = LocalToWorld(
-                            rotation
-                                .to_homogeneous()
-                                .append_translation(&translation.vector)
-                                .prepend_nonuniform_scaling(&non_uniform_scale.0),
-                        );
-                    });
-
-                // Just to issue warnings: Scale + NonUniformScale
-                queries.11.iter_entities().for_each(
-                    |(entity, (mut _ltw, _scale, _non_uniform_scale))| {
-                        log::warn!(
-                            "Entity {:?} has both a Scale and NonUniformScale component.",
-                            entity
-                        );
-                    },
-                );
             })
     }
 }
