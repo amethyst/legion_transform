@@ -9,5 +9,5 @@ pub mod local_to_world_system;
 pub mod transform_system_bundle;
 
 pub mod prelude {
-    pub use crate::{components::*, transform_system_bundle::TransformSystemBundle};
+    pub use crate::components::*;
 }
