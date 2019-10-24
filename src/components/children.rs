@@ -1,7 +1,9 @@
 use crate::ecs::prelude::*;
+use shrinkwraprs::Shrinkwrap;
 use smallvec::SmallVec;
 
-#[derive(Default, Clone)]
+#[derive(Shrinkwrap, Default, Clone)]
+#[shrinkwrap(mutable)]
 pub struct Children(pub SmallVec<[Entity; 8]>);
 
 impl Children {

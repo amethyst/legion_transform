@@ -1,7 +1,9 @@
 use crate::math::Matrix4;
+use shrinkwraprs::Shrinkwrap;
 use std::fmt;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Shrinkwrap, Debug, PartialEq, Clone, Copy)]
+#[shrinkwrap(mutable)]
 pub struct LocalToWorld(pub Matrix4<f32>);
 
 impl LocalToWorld {
