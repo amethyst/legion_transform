@@ -7,6 +7,7 @@ use std::fmt;
 pub struct LocalToWorld(pub Matrix4<f32>);
 
 impl LocalToWorld {
+    #[inline(always)]
     pub fn identity() -> Self {
         Self(Matrix4::identity())
     }

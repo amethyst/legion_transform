@@ -6,12 +6,14 @@ use std::fmt;
 pub struct Scale(pub f32);
 
 impl From<f32> for Scale {
+    #[inline(always)]
     fn from(scale: f32) -> Self {
         Self(scale)
     }
 }
 
 impl Scale {
+    #[inline(always)]
     pub fn identity() -> Self {
         Scale(1.0)
     }

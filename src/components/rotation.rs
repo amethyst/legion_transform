@@ -1,3 +1,17 @@
 use crate::math::UnitQuaternion;
+use shrinkwraprs::Shrinkwrap;
 
-pub type Rotation = UnitQuaternion<f32>;
+#[derive(Shrinkwrap, Debug, PartialEq, Clone, Copy)]
+#[shrinkwrap(mutable)]
+pub struct Rotation(pub UnitQuaternion<f32>);
+impl Rotation {
+    #[inline(always)]
+    pub fn identity() -> Self {
+        Self(UnitQuaternion::identity())
+    }
+
+    #[inline(always)]
+    pub fn from_euler_angles(roll: f32, pitch: f32, yaw: f32) -> Self {
+        Self(UnitQuaternion::from_euler_angles(roll, pitch, yaw))
+    }
+}
