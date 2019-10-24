@@ -1,7 +1,15 @@
+use shrinkwraprs::Shrinkwrap;
 use std::fmt;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Shrinkwrap, Debug, PartialEq, Clone, Copy)]
+#[shrinkwrap(mutable)]
 pub struct Scale(pub f32);
+
+impl From<f32> for Scale {
+    fn from(scale: f32) -> Self {
+        Self(scale)
+    }
+}
 
 impl Scale {
     pub fn identity() -> Self {

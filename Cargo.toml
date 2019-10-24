@@ -8,11 +8,13 @@ license = "MIT"
 
 [dependencies]
 legion = { git = "https://github.com/jaynus/legion.git", branch = "systems" }
+#legion = { path = "../legion" }
 log = "0.4"
 nalgebra = { version = "0.18.1", features = ["serde-serialize", "mint"] }
 rayon = "1.2"
 serde = { version = "1", features = ["derive"] }
 smallvec = "0.6"
+shrinkwraprs = "0.2"
 
 [dev-dependencies]
 env_logger = "0.7"
