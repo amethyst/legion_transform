@@ -15,3 +15,9 @@ impl Rotation {
         Self(UnitQuaternion::from_euler_angles(roll, pitch, yaw))
     }
 }
+
+impl From<UnitQuaternion<f32>> for Rotation {
+    fn from(rotation: UnitQuaternion<f32>) -> Self {
+        Self(rotation)
+    }
+}
