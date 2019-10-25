@@ -12,6 +12,12 @@ impl LocalToParent {
     }
 }
 
+impl Default for LocalToParent {
+    fn default() -> Self {
+        Self::identity()
+    }
+}
+
 impl fmt::Display for LocalToParent {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)

@@ -17,6 +17,12 @@ impl Translation {
     }
 }
 
+impl Default for Translation {
+    fn default() -> Self {
+        Self::identity()
+    }
+}
+
 impl From<Vector3<f32>> for Translation {
     fn from(translation: Vector3<f32>) -> Self {
         Self(Translation3::from(translation))

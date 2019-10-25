@@ -13,6 +13,12 @@ impl LocalToWorld {
     }
 }
 
+impl Default for LocalToWorld {
+    fn default() -> Self {
+        Self::identity()
+    }
+}
+
 impl fmt::Display for LocalToWorld {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)

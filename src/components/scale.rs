@@ -19,6 +19,12 @@ impl Scale {
     }
 }
 
+impl Default for Scale {
+    fn default() -> Self {
+        Self::identity()
+    }
+}
+
 impl fmt::Display for Scale {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Scale({})", self.0)

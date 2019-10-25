@@ -16,6 +16,12 @@ impl Rotation {
     }
 }
 
+impl Default for Rotation {
+    fn default() -> Self {
+        Self::identity()
+    }
+}
+
 impl From<UnitQuaternion<f32>> for Rotation {
     fn from(rotation: UnitQuaternion<f32>) -> Self {
         Self(rotation)
