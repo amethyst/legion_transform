@@ -108,35 +108,35 @@ pub fn build(_: &mut World) -> Box<dyn Schedulable> {
         )
         // Just to issue warnings: Scale + NonUniformScale
         .with_query(<(Read<LocalToParent>, Read<Scale>, Read<NonUniformScale>)>::query())
-        .build(move |_commands, _world, _, queries| {
+        .build(move |_commands, world, _, queries| {
             let (a, b, c, d, e, f, g, h, i, j, k, l) = queries;
             rayon::scope(|s| {
-                s.spawn(|_| {
+                s.spawn(|_| unsafe {
                     // Translation
-                    a.for_each(|(mut ltw, translation)| {
+                    a.for_each_unchecked(world, |(mut ltw, translation)| {
                         *ltw = LocalToParent(translation.to_homogeneous());
                     });
                 });
-                s.spawn(|_| {
+                s.spawn(|_| unsafe {
                     // Rotation
-                    b.for_each(|(mut ltw, rotation)| {
+                    b.for_each_unchecked(world, |(mut ltw, rotation)| {
                         *ltw = LocalToParent(rotation.to_homogeneous());
                     });
                 });
-                s.spawn(|_| {
+                s.spawn(|_| unsafe {
                     // Scale
-                    c.for_each(|(mut ltw, scale)| {
+                    c.for_each_unchecked(world, |(mut ltw, scale)| {
                         *ltw = LocalToParent(Matrix4::new_scaling(scale.0));
                     });
                 });
-                s.spawn(|_| {
+                s.spawn(|_| unsafe {
                     // NonUniformScale
-                    d.for_each(|(mut ltw, non_uniform_scale)| {
+                    d.for_each_unchecked(world, |(mut ltw, non_uniform_scale)| {
                         *ltw = LocalToParent(Matrix4::new_nonuniform_scaling(&non_uniform_scale.0));
                     });
 
                     // Translation + Rotation
-                    e.for_each(|(mut ltw, translation, rotation)| {
+                    e.for_each_unchecked(world, |(mut ltw, translation, rotation)| {
                         *ltw = LocalToParent(
                             rotation
                                 .to_homogeneous()
@@ -144,14 +144,14 @@ pub fn build(_: &mut World) -> Box<dyn Schedulable> {
                         );
                     });
                 });
-                s.spawn(|_| {
+                s.spawn(|_| unsafe {
                     // Translation + Scale
-                    f.for_each(|(mut ltw, translation, scale)| {
+                    f.for_each_unchecked(world, |(mut ltw, translation, scale)| {
                         *ltw = LocalToParent(translation.to_homogeneous().prepend_scaling(scale.0));
                     });
 
                     // Translation + NonUniformScale
-                    g.for_each(|(mut ltw, translation, non_uniform_scale)| {
+                    g.for_each_unchecked(world, |(mut ltw, translation, non_uniform_scale)| {
                         *ltw = LocalToParent(
                             translation
                                 .to_homogeneous()
@@ -159,15 +159,15 @@ pub fn build(_: &mut World) -> Box<dyn Schedulable> {
                         );
                     });
                 });
-                s.spawn(|_| {
+                s.spawn(|_| unsafe {
                     // Rotation + Scale
-                    h.for_each(|(mut ltw, rotation, scale)| {
+                    h.for_each_unchecked(world, |(mut ltw, rotation, scale)| {
                         *ltw = LocalToParent(rotation.to_homogeneous().prepend_scaling(scale.0));
                     });
                 });
-                s.spawn(|_| {
+                s.spawn(|_| unsafe {
                     // Rotation + NonUniformScale
-                    i.for_each(|(mut ltw, rotation, non_uniform_scale)| {
+                    i.for_each_unchecked(world, |(mut ltw, rotation, non_uniform_scale)| {
                         *ltw = LocalToParent(
                             rotation
                                 .to_homogeneous()
@@ -175,9 +175,9 @@ pub fn build(_: &mut World) -> Box<dyn Schedulable> {
                         );
                     });
                 });
-                s.spawn(|_| {
+                s.spawn(|_| unsafe {
                     // Translation + Rotation + Scale
-                    j.for_each(|(mut ltw, translation, rotation, scale)| {
+                    j.for_each_unchecked(world, |(mut ltw, translation, rotation, scale)| {
                         *ltw = LocalToParent(
                             rotation
                                 .to_homogeneous()
@@ -186,20 +186,23 @@ pub fn build(_: &mut World) -> Box<dyn Schedulable> {
                         );
                     });
                 });
-                s.spawn(|_| {
+                s.spawn(|_| unsafe {
                     // Translation + Rotation + NonUniformScale
-                    k.for_each(|(mut ltw, translation, rotation, non_uniform_scale)| {
-                        *ltw = LocalToParent(
-                            rotation
-                                .to_homogeneous()
-                                .append_translation(&translation.vector)
-                                .prepend_nonuniform_scaling(&non_uniform_scale.0),
-                        );
-                    });
+                    k.for_each_unchecked(
+                        world,
+                        |(mut ltw, translation, rotation, non_uniform_scale)| {
+                            *ltw = LocalToParent(
+                                rotation
+                                    .to_homogeneous()
+                                    .append_translation(&translation.vector)
+                                    .prepend_nonuniform_scaling(&non_uniform_scale.0),
+                            );
+                        },
+                    );
                 });
             });
             // Just to issue warnings: Scale + NonUniformScale
-            l.iter_entities()
+            l.iter_entities(world)
                 .for_each(|(entity, (mut _ltw, _scale, _non_uniform_scale))| {
                     log::warn!(
                         "Entity {:?} has both a Scale and NonUniformScale component.",

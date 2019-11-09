@@ -11,9 +11,9 @@ pub fn build(_: &mut World) -> Vec<Box<dyn Schedulable>> {
                 & component::<LocalToWorld>()
                 & !component::<PreviousParent>(),
         ))
-        .build(move |commands, _world, _resource, query| {
+        .build(move |commands, world, _resource, query| {
             // Add missing `PreviousParent` components
-            for (entity, _parent) in query.iter_entities() {
+            for (entity, _parent) in query.iter_entities(world) {
                 log::trace!("Adding missing PreviousParent to {}", entity);
                 commands.add_component(entity, PreviousParent(None));
             }
@@ -32,7 +32,7 @@ pub fn build(_: &mut World) -> Vec<Box<dyn Schedulable>> {
         .build(move |commands, world, _resource, queries| {
             // Entities with a missing `Parent` (ie. ones that have a `PreviousParent`), remove
             // them from the `Children` of the `PreviousParent`.
-            for (entity, previous_parent) in queries.0.iter_entities() {
+            for (entity, previous_parent) in queries.0.iter_entities(world) {
                 log::trace!("Parent was removed from {}", entity);
                 if let Some(previous_parent_entity) = previous_parent.0 {
                     if let Some(mut previous_parent_children) =
@@ -49,7 +49,7 @@ pub fn build(_: &mut World) -> Vec<Box<dyn Schedulable>> {
                 HashMap::<Entity, SmallVec<[Entity; 8]>>::with_capacity(16);
 
             // Entities with a changed Parent (that also have a PreviousParent, even if None)
-            for (entity, (parent, mut previous_parent)) in queries.1.iter_entities() {
+            for (entity, (parent, mut previous_parent)) in queries.1.iter_entities(world) {
                 log::trace!("Parent changed for {}", entity);
 
                 // If the `PreviousParent` is not None.
@@ -97,7 +97,7 @@ pub fn build(_: &mut World) -> Vec<Box<dyn Schedulable>> {
             }
 
             // Deleted `Parents` (ie. Entities with a `Children` but no `LocalToWorld`).
-            for (entity, children) in queries.2.iter_entities() {
+            for (entity, children) in queries.2.iter_entities(world) {
                 log::trace!("The entity {} doesn't have a LocalToWorld", entity);
                 if children_additions.remove(&entity).is_none() {
                     log::trace!(" > It needs to be remove from the ECS.");

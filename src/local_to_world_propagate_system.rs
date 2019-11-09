@@ -12,7 +12,7 @@ pub fn build(_: &mut World) -> Box<dyn Schedulable> {
         .read_component::<Children>()
         .read_component::<LocalToParent>()
         .build(move |commands, world, _resource, query| {
-            for (children, local_to_world) in query.iter() {
+            for (children, local_to_world) in query.iter(world) {
                 for child in children.0.iter() {
                     propagate_recursive(*local_to_world, world, *child, commands);
                 }
