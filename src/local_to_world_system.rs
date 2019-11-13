@@ -219,7 +219,7 @@ pub fn build(_: &mut World) -> Box<dyn Schedulable> {
 
                 // Just to issue warnings: Scale + NonUniformScale
                 unsafe {
-                    l.iter_entities_unchecked(world).for_each(
+                    l.iter_entities_immutable(world).for_each(
                         |(entity, (mut _ltw, _scale, _non_uniform_scale))| {
                             log::warn!(
                                 "Entity {:?} has both a Scale and NonUniformScale component.",
