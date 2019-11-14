@@ -7,7 +7,7 @@ edition = "2018"
 license = "MIT"
 
 [dependencies]
-legion = { git = "https://github.com/jaynus/legion.git", branch = "systems" }
+legion = { git = "https://github.com/TomGillen/legion.git" }
 #legion = { path = "../legion" }
 log = "0.4"
 nalgebra = { version = "0.18.1", features = ["serde-serialize", "mint"] }
