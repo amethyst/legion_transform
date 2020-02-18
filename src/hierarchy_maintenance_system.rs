@@ -132,9 +132,11 @@ mod test {
     fn correct_children() {
         let _ = env_logger::builder().is_test(true).try_init();
 
+        let mut resources = Resources::default();
+
         let mut world = Universe::new().create_world();
 
-        let systems = build(&mut world);
+        let mut systems = build(&mut world);
 
         // Add parent entities
         let parent = *world
@@ -165,9 +167,12 @@ mod test {
         world.add_component(e1, Parent(parent));
         world.add_component(e2, Parent(parent));
 
-        for system in systems.iter() {
-            system.run(&mut world);
-            system.command_buffer_mut().write(&mut world);
+        for system in systems.iter_mut() {
+            system.run(&mut world, &mut resources);
+            system
+                .command_buffer_mut(world.id())
+                .unwrap()
+                .write(&mut world);
         }
 
         assert_eq!(
@@ -185,9 +190,12 @@ mod test {
         (*world.get_component_mut::<Parent>(e1).unwrap()).0 = e2;
 
         // Run the system on it
-        for system in systems.iter() {
-            system.run(&mut world);
-            system.command_buffer_mut().write(&mut world);
+        for system in systems.iter_mut() {
+            system.run(&mut world, &mut resources);
+            system
+                .command_buffer_mut(world.id())
+                .unwrap()
+                .write(&mut world);
         }
 
         assert_eq!(
@@ -215,9 +223,12 @@ mod test {
         world.delete(e1);
 
         // Run the system on it
-        for system in systems.iter() {
-            system.run(&mut world);
-            system.command_buffer_mut().write(&mut world);
+        for system in systems.iter_mut() {
+            system.run(&mut world, &mut resources);
+            system
+                .command_buffer_mut(world.id())
+                .unwrap()
+                .write(&mut world);
         }
 
         assert_eq!(

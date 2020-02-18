@@ -7,7 +7,7 @@ edition = "2018"
 license = "MIT"
 
 [dependencies]
-legion = "0.2"
+legion = { git = "https://github.com/TomGillen/legion.git" }
 log = "0.4"
 nalgebra = { version = "0.18.1", features = ["serde-serialize", "mint"] }
 rayon = "1.2"

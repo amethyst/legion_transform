@@ -65,12 +65,14 @@ mod test {
     fn did_propagate() {
         let _ = env_logger::builder().is_test(true).try_init();
 
+        let mut resources = Resources::default();
         let mut world = Universe::new().create_world();
 
-        let hierarchy_maintenance_systems = hierarchy_maintenance_system::build(&mut world);
-        let local_to_parent_system = local_to_parent_system::build(&mut world);
-        let local_to_world_system = local_to_world_system::build(&mut world);
-        let local_to_world_propagate_system = local_to_world_propagate_system::build(&mut world);
+        let mut hierarchy_maintenance_systems = hierarchy_maintenance_system::build(&mut world);
+        let mut local_to_parent_system = local_to_parent_system::build(&mut world);
+        let mut local_to_world_system = local_to_world_system::build(&mut world);
+        let mut local_to_world_propagate_system =
+            local_to_world_propagate_system::build(&mut world);
 
         // Root entity
         let parent = *world
@@ -103,19 +105,27 @@ mod test {
         world.add_component(e2, Parent(parent));
 
         // Run the needed systems on it.
-        for system in hierarchy_maintenance_systems.iter() {
-            system.run(&mut world);
-            system.command_buffer_mut().write(&mut world);
+        for system in hierarchy_maintenance_systems.iter_mut() {
+            system.run(&mut world, &mut resources);
+            system
+                .command_buffer_mut(world.id())
+                .unwrap()
+                .write(&mut world);
         }
-        local_to_parent_system.run(&mut world);
+        local_to_parent_system.run(&mut world, &mut resources);
         local_to_parent_system
-            .command_buffer_mut()
+            .command_buffer_mut(world.id())
+            .unwrap()
             .write(&mut world);
-        local_to_world_system.run(&mut world);
-        local_to_world_system.command_buffer_mut().write(&mut world);
-        local_to_world_propagate_system.run(&mut world);
+        local_to_world_system.run(&mut world, &mut resources);
+        local_to_world_system
+            .command_buffer_mut(world.id())
+            .unwrap()
+            .write(&mut world);
+        local_to_world_propagate_system.run(&mut world, &mut resources);
         local_to_world_propagate_system
-            .command_buffer_mut()
+            .command_buffer_mut(world.id())
+            .unwrap()
             .write(&mut world);
 
         assert_eq!(
