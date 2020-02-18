@@ -10,7 +10,7 @@ fn main() {
     let mut resources = Resources::default();
 
     // Create a system bundle (vec of systems) for LegionTransform
-    let mut transform_system_bundle = transform_system_bundle::build(&mut world);
+    let mut transform_system_bundle = transform_system_bundle::build(&mut world, &mut resources);
 
     // A user-defined space transform is split into 4 different components: [`Translation`,
     // `Rotation`, `Scale`, `NonUniformScale`]. Any combination of these components can be added to
@@ -88,7 +88,7 @@ fn main() {
 
     // At this point all `LocalToWorld` components have correct values in them. Running the system
     // again will result in a short-circuit as only changed components are considered for update.
-    let mut query = <Read<LocalToWorld>>::query();
+    let query = <Read<LocalToWorld>>::query();
     for (entity, local_to_world) in query.iter_entities(&mut world) {
         println!(
             "Entity {} and a LocalToWorld matrix: {}",

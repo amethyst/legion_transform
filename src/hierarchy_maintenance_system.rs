@@ -3,7 +3,7 @@ use crate::{components::*, ecs::prelude::*};
 use smallvec::SmallVec;
 use std::collections::HashMap;
 
-pub fn build(_: &mut World) -> Vec<Box<dyn Schedulable>> {
+pub fn build(_: &mut World, _: &mut Resources) -> Vec<Box<dyn Schedulable>> {
     let missing_previous_parent_system = SystemBuilder::<()>::new("MissingPreviousParentSystem")
         // Entities with missing `PreviousParent`
         .with_query(<Read<Parent>>::query().filter(
@@ -136,7 +136,7 @@ mod test {
 
         let mut world = Universe::new().create_world();
 
-        let mut systems = build(&mut world);
+        let mut systems = build(&mut world, &mut resources);
 
         // Add parent entities
         let parent = *world
@@ -164,8 +164,8 @@ mod test {
         let (e1, e2) = (children[0], children[1]);
 
         // Parent `e1` and `e2` to `parent`.
-        world.add_component(e1, Parent(parent));
-        world.add_component(e2, Parent(parent));
+        world.add_component(e1, Parent(parent)).unwrap();
+        world.add_component(e2, Parent(parent)).unwrap();
 
         for system in systems.iter_mut() {
             system.run(&mut world, &mut resources);

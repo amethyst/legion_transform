@@ -4,7 +4,7 @@ use crate::{
     ecs::{prelude::*, systems::SubWorld},
 };
 
-pub fn build(_: &mut World) -> Box<dyn Schedulable> {
+pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
     SystemBuilder::<()>::new("LocalToWorldPropagateSystem")
         // Entities with a `Children` and `LocalToWorld` but NOT a `Parent` (ie those that are
         // roots of a hierarchy).
@@ -68,11 +68,12 @@ mod test {
         let mut resources = Resources::default();
         let mut world = Universe::new().create_world();
 
-        let mut hierarchy_maintenance_systems = hierarchy_maintenance_system::build(&mut world);
-        let mut local_to_parent_system = local_to_parent_system::build(&mut world);
-        let mut local_to_world_system = local_to_world_system::build(&mut world);
+        let mut hierarchy_maintenance_systems =
+            hierarchy_maintenance_system::build(&mut world, &mut resources);
+        let mut local_to_parent_system = local_to_parent_system::build(&mut world, &mut resources);
+        let mut local_to_world_system = local_to_world_system::build(&mut world, &mut resources);
         let mut local_to_world_propagate_system =
-            local_to_world_propagate_system::build(&mut world);
+            local_to_world_propagate_system::build(&mut world, &mut resources);
 
         // Root entity
         let parent = *world
@@ -101,8 +102,8 @@ mod test {
         let (e1, e2) = (children[0], children[1]);
 
         // Parent `e1` and `e2` to `parent`.
-        world.add_component(e1, Parent(parent));
-        world.add_component(e2, Parent(parent));
+        world.add_component(e1, Parent(parent)).unwrap();
+        world.add_component(e2, Parent(parent)).unwrap();
 
         // Run the needed systems on it.
         for system in hierarchy_maintenance_systems.iter_mut() {

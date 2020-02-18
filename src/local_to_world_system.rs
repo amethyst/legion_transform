@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use crate::{components::*, ecs::prelude::*, math::Matrix4};
 
-pub fn build(_: &mut World) -> Box<dyn Schedulable> {
+pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
     SystemBuilder::<()>::new("LocalToWorldUpdateSystem")
         // Translation
         .with_query(<(Write<LocalToWorld>, Read<Translation>)>::query().filter(
@@ -240,7 +240,7 @@ mod test {
 
         let mut resources = Resources::default();
         let mut world = Universe::new().create_world();
-        let mut system = build(&mut world);
+        let mut system = build(&mut world, &mut resources);
 
         let ltw = LocalToWorld::identity();
         let t = Translation::new(1.0, 2.0, 3.0);
