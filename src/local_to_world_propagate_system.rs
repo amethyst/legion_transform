@@ -22,7 +22,7 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
 
 fn propagate_recursive(
     parent_local_to_world: LocalToWorld,
-    world: &mut SubWorld,
+    world: &SubWorld,
     entity: Entity,
     commands: &mut CommandBuffer,
 ) {
