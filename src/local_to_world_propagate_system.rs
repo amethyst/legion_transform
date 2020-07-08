@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use crate::{
     components::*,
-    ecs::{prelude::*, systems::SubWorld},
+    ecs::prelude::*,
 };
 
 pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
