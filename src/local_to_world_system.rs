@@ -1,7 +1,11 @@
 #![allow(dead_code)]
-use crate::{components::*, ecs::prelude::*, math::Matrix4};
+use crate::{
+    components::*,
+    ecs::{systems::Schedulable, *},
+    math::Matrix4,
+};
 
-pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
+pub fn build(_: &mut World, _: &mut Resources) -> impl Schedulable {
     SystemBuilder::<()>::new("LocalToWorldUpdateSystem")
         // Translation
         .with_query(<(Write<LocalToWorld>, Read<Translation>)>::query().filter(
@@ -9,7 +13,7 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
                 & !component::<Rotation>()
                 & !component::<Scale>()
                 & !component::<NonUniformScale>()
-                & (changed::<Translation>()),
+                & (maybe_changed::<Translation>()),
         ))
         // Rotation
         .with_query(<(Write<LocalToWorld>, Read<Rotation>)>::query().filter(
@@ -17,7 +21,7 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
                 & !component::<Translation>()
                 & !component::<Scale>()
                 & !component::<NonUniformScale>()
-                & (changed::<Rotation>()),
+                & (maybe_changed::<Rotation>()),
         ))
         // Scale
         .with_query(<(Write<LocalToWorld>, Read<Scale>)>::query().filter(
@@ -25,7 +29,7 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
                 & !component::<Translation>()
                 & !component::<Rotation>()
                 & !component::<NonUniformScale>()
-                & (changed::<Scale>()),
+                & (maybe_changed::<Scale>()),
         ))
         // NonUniformScale
         .with_query(
@@ -34,7 +38,7 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
                     & !component::<Translation>()
                     & !component::<Rotation>()
                     & !component::<Scale>()
-                    & (changed::<NonUniformScale>()),
+                    & (maybe_changed::<NonUniformScale>()),
             ),
         )
         // Translation + Rotation
@@ -43,7 +47,7 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
                 !component::<Parent>()
                     & !component::<Scale>()
                     & !component::<NonUniformScale>()
-                    & (changed::<Translation>() | changed::<Rotation>()),
+                    & (maybe_changed::<Translation>() | maybe_changed::<Rotation>()),
             ),
         )
         // Translation + Scale
@@ -52,7 +56,7 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
                 !component::<Parent>()
                     & !component::<Rotation>()
                     & !component::<NonUniformScale>()
-                    & (changed::<Translation>() | changed::<Scale>()),
+                    & (maybe_changed::<Translation>() | maybe_changed::<Scale>()),
             ),
         )
         // Translation + NonUniformScale
@@ -66,7 +70,7 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
                 !component::<Parent>()
                     & !component::<Rotation>()
                     & !component::<Scale>()
-                    & (changed::<Translation>() | changed::<NonUniformScale>()),
+                    & (maybe_changed::<Translation>() | maybe_changed::<NonUniformScale>()),
             ),
         )
         // Rotation + Scale
@@ -75,7 +79,7 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
                 !component::<Parent>()
                     & !component::<Translation>()
                     & !component::<NonUniformScale>()
-                    & (changed::<Rotation>() | changed::<Scale>()),
+                    & (maybe_changed::<Rotation>() | maybe_changed::<Scale>()),
             ),
         )
         // Rotation + NonUniformScale
@@ -84,7 +88,7 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
                 !component::<Parent>()
                     & !component::<Translation>()
                     & !component::<Scale>()
-                    & (changed::<Rotation>() | changed::<NonUniformScale>()),
+                    & (maybe_changed::<Rotation>() | maybe_changed::<NonUniformScale>()),
             ),
         )
         // Translation + Rotation + Scale
@@ -98,7 +102,9 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
             .filter(
                 !component::<Parent>()
                     & !component::<NonUniformScale>()
-                    & (changed::<Translation>() | changed::<Rotation>() | changed::<Scale>()),
+                    & (maybe_changed::<Translation>()
+                        | maybe_changed::<Rotation>()
+                        | maybe_changed::<Scale>()),
             ),
         )
         // Translation + Rotation + NonUniformScale
@@ -112,46 +118,51 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
             .filter(
                 !component::<Parent>()
                     & !component::<Scale>()
-                    & (changed::<Translation>()
-                        | changed::<Rotation>()
-                        | changed::<NonUniformScale>()),
+                    & (maybe_changed::<Translation>()
+                        | maybe_changed::<Rotation>()
+                        | maybe_changed::<NonUniformScale>()),
             ),
         )
         // Just to issue warnings: Scale + NonUniformScale
         .with_query(
-            <(Read<LocalToWorld>, Read<Scale>, Read<NonUniformScale>)>::query()
-                .filter(!component::<Parent>()),
+            <(
+                Entity,
+                Read<LocalToWorld>,
+                Read<Scale>,
+                Read<NonUniformScale>,
+            )>::query()
+            .filter(!component::<Parent>()),
         )
         .build(move |_commands, world, _, queries| {
             let (a, b, c, d, e, f, g, h, i, j, k, l) = queries;
             rayon::scope(|s| {
                 s.spawn(|_| unsafe {
                     // Translation
-                    a.for_each_unchecked(world, |(mut ltw, translation)| {
+                    a.for_each_unchecked(world, |(ltw, translation)| {
                         *ltw = LocalToWorld(translation.to_homogeneous());
                     });
                 });
                 s.spawn(|_| unsafe {
                     // Rotation
-                    b.for_each_unchecked(world, |(mut ltw, rotation)| {
+                    b.for_each_unchecked(world, |(ltw, rotation)| {
                         *ltw = LocalToWorld(rotation.to_homogeneous());
                     });
                 });
                 s.spawn(|_| unsafe {
                     // Scale
-                    c.for_each_unchecked(world, |(mut ltw, scale)| {
+                    c.for_each_unchecked(world, |(ltw, scale)| {
                         *ltw = LocalToWorld(Matrix4::new_scaling(scale.0));
                     });
                 });
                 s.spawn(|_| unsafe {
                     // NonUniformScale
-                    d.for_each_unchecked(world, |(mut ltw, non_uniform_scale)| {
+                    d.for_each_unchecked(world, |(ltw, non_uniform_scale)| {
                         *ltw = LocalToWorld(Matrix4::new_nonuniform_scaling(&non_uniform_scale.0));
                     });
                 });
                 s.spawn(|_| unsafe {
                     // Translation + Rotation
-                    e.for_each_unchecked(world, |(mut ltw, translation, rotation)| {
+                    e.for_each_unchecked(world, |(ltw, translation, rotation)| {
                         *ltw = LocalToWorld(
                             rotation
                                 .to_homogeneous()
@@ -161,13 +172,13 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
                 });
                 s.spawn(|_| unsafe {
                     // Translation + Scale
-                    f.for_each_unchecked(world, |(mut ltw, translation, scale)| {
+                    f.for_each_unchecked(world, |(ltw, translation, scale)| {
                         *ltw = LocalToWorld(translation.to_homogeneous().prepend_scaling(scale.0));
                     });
                 });
                 s.spawn(|_| unsafe {
                     // Translation + NonUniformScale
-                    g.for_each_unchecked(world, |(mut ltw, translation, non_uniform_scale)| {
+                    g.for_each_unchecked(world, |(ltw, translation, non_uniform_scale)| {
                         *ltw = LocalToWorld(
                             translation
                                 .to_homogeneous()
@@ -177,13 +188,13 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
                 });
                 s.spawn(|_| unsafe {
                     // Rotation + Scale
-                    h.for_each_unchecked(world, |(mut ltw, rotation, scale)| {
+                    h.for_each_unchecked(world, |(ltw, rotation, scale)| {
                         *ltw = LocalToWorld(rotation.to_homogeneous().prepend_scaling(scale.0));
                     });
                 });
                 s.spawn(|_| unsafe {
                     // Rotation + NonUniformScale
-                    i.for_each_unchecked(world, |(mut ltw, rotation, non_uniform_scale)| {
+                    i.for_each_unchecked(world, |(ltw, rotation, non_uniform_scale)| {
                         *ltw = LocalToWorld(
                             rotation
                                 .to_homogeneous()
@@ -193,7 +204,7 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
                 });
                 s.spawn(|_| unsafe {
                     // Translation + Rotation + Scale
-                    j.for_each_unchecked(world, |(mut ltw, translation, rotation, scale)| {
+                    j.for_each_unchecked(world, |(ltw, translation, rotation, scale)| {
                         *ltw = LocalToWorld(
                             rotation
                                 .to_homogeneous()
@@ -206,7 +217,7 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
                     // Translation + Rotation + NonUniformScale
                     k.for_each_unchecked(
                         world,
-                        |(mut ltw, translation, rotation, non_uniform_scale)| {
+                        |(ltw, translation, rotation, non_uniform_scale)| {
                             *ltw = LocalToWorld(
                                 rotation
                                     .to_homogeneous()
@@ -218,14 +229,13 @@ pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
                 });
 
                 // Just to issue warnings: Scale + NonUniformScale
-                l.iter_entities(world).for_each(
-                    |(entity, (mut _ltw, _scale, _non_uniform_scale))| {
+                l.iter(world)
+                    .for_each(|(entity, mut _ltw, _scale, _non_uniform_scale)| {
                         log::warn!(
                             "Entity {:?} has both a Scale and NonUniformScale component.",
                             entity
                         );
-                    },
-                );
+                    });
             });
         })
 }
@@ -240,7 +250,9 @@ mod test {
 
         let mut resources = Resources::default();
         let mut world = Universe::new().create_world();
-        let mut system = build(&mut world, &mut resources);
+        let mut schedule = Schedule::builder()
+            .add_system(build(&mut world, &mut resources))
+            .build();
 
         let ltw = LocalToWorld::identity();
         let t = Translation::new(1.0, 2.0, 3.0);
@@ -249,80 +261,108 @@ mod test {
         let nus = NonUniformScale::new(1.0, 2.0, 3.0);
 
         // Add every combination of transform types.
-        let translation = *world.insert((), vec![(ltw, t)]).first().unwrap();
-        let rotation = *world.insert((), vec![(ltw, r)]).first().unwrap();
-        let scale = *world.insert((), vec![(ltw, s)]).first().unwrap();
-        let non_uniform_scale = *world.insert((), vec![(ltw, nus)]).first().unwrap();
-        let translation_and_rotation = *world.insert((), vec![(ltw, t, r)]).first().unwrap();
-        let translation_and_scale = *world.insert((), vec![(ltw, t, s)]).first().unwrap();
-        let translation_and_nus = *world.insert((), vec![(ltw, t, nus)]).first().unwrap();
-        let rotation_scale = *world.insert((), vec![(ltw, r, s)]).first().unwrap();
-        let rotation_nus = *world.insert((), vec![(ltw, r, nus)]).first().unwrap();
-        let translation_rotation_scale = *world.insert((), vec![(ltw, t, r, s)]).first().unwrap();
-        let translation_rotation_nus = *world.insert((), vec![(ltw, t, r, nus)]).first().unwrap();
+        let translation = world.push((ltw, t));
+        let rotation = world.push((ltw, r));
+        let scale = world.push((ltw, s));
+        let non_uniform_scale = world.push((ltw, nus));
+        let translation_and_rotation = world.push((ltw, t, r));
+        let translation_and_scale = world.push((ltw, t, s));
+        let translation_and_nus = world.push((ltw, t, nus));
+        let rotation_scale = world.push((ltw, r, s));
+        let rotation_nus = world.push((ltw, r, nus));
+        let translation_rotation_scale = world.push((ltw, t, r, s));
+        let translation_rotation_nus = world.push((ltw, t, r, nus));
 
         // Run the system
-        system.run(&mut world, &mut resources);
-        system
-            .command_buffer_mut(world.id())
-            .unwrap()
-            .write(&mut world);
+        schedule.execute(&mut world, &mut resources);
 
         // Verify that each was transformed correctly.
         assert_eq!(
-            world.get_component::<LocalToWorld>(translation).unwrap().0,
+            world
+                .entry(translation)
+                .unwrap()
+                .get_component::<LocalToWorld>()
+                .unwrap()
+                .0,
             t.to_homogeneous()
         );
         assert_eq!(
-            world.get_component::<LocalToWorld>(rotation).unwrap().0,
+            world
+                .entry(rotation)
+                .unwrap()
+                .get_component::<LocalToWorld>()
+                .unwrap()
+                .0,
             r.to_homogeneous()
         );
         assert_eq!(
-            world.get_component::<LocalToWorld>(scale).unwrap().0,
+            world
+                .entry(scale)
+                .unwrap()
+                .get_component::<LocalToWorld>()
+                .unwrap()
+                .0,
             Matrix4::new_scaling(s.0),
         );
         assert_eq!(
             world
-                .get_component::<LocalToWorld>(non_uniform_scale)
+                .entry(non_uniform_scale)
+                .unwrap()
+                .get_component::<LocalToWorld>()
                 .unwrap()
                 .0,
             Matrix4::new_nonuniform_scaling(&nus.0),
         );
         assert_eq!(
             world
-                .get_component::<LocalToWorld>(translation_and_rotation)
+                .entry(translation_and_rotation)
+                .unwrap()
+                .get_component::<LocalToWorld>()
                 .unwrap()
                 .0,
             r.to_homogeneous().append_translation(&t.vector),
         );
         assert_eq!(
             world
-                .get_component::<LocalToWorld>(translation_and_scale)
+                .entry(translation_and_scale)
+                .unwrap()
+                .get_component::<LocalToWorld>()
                 .unwrap()
                 .0,
             t.to_homogeneous().prepend_scaling(s.0),
         );
         assert_eq!(
             world
-                .get_component::<LocalToWorld>(translation_and_nus)
+                .entry(translation_and_nus)
+                .unwrap()
+                .get_component::<LocalToWorld>()
                 .unwrap()
                 .0,
             t.to_homogeneous().prepend_nonuniform_scaling(&nus.0),
         );
         assert_eq!(
             world
-                .get_component::<LocalToWorld>(rotation_scale)
+                .entry(rotation_scale)
+                .unwrap()
+                .get_component::<LocalToWorld>()
                 .unwrap()
                 .0,
             r.to_homogeneous().prepend_scaling(s.0)
         );
         assert_eq!(
-            world.get_component::<LocalToWorld>(rotation_nus).unwrap().0,
+            world
+                .entry(rotation_nus)
+                .unwrap()
+                .get_component::<LocalToWorld>()
+                .unwrap()
+                .0,
             r.to_homogeneous().prepend_nonuniform_scaling(&nus.0)
         );
         assert_eq!(
             world
-                .get_component::<LocalToWorld>(translation_rotation_scale)
+                .entry(translation_rotation_scale)
+                .unwrap()
+                .get_component::<LocalToWorld>()
                 .unwrap()
                 .0,
             r.to_homogeneous()
@@ -331,7 +371,9 @@ mod test {
         );
         assert_eq!(
             world
-                .get_component::<LocalToWorld>(translation_rotation_nus)
+                .entry(translation_rotation_nus)
+                .unwrap()
+                .get_component::<LocalToWorld>()
                 .unwrap()
                 .0,
             r.to_homogeneous()

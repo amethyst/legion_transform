@@ -1,7 +1,7 @@
 extern crate legion;
 extern crate legion_transform;
 
-use legion::prelude::*;
+use legion::*;
 use legion_transform::prelude::*;
 
 #[allow(unused)]
@@ -13,37 +13,28 @@ fn tldr_sample() {
     // Create a system bundle (vec of systems) for LegionTransform
     let transform_system_bundle = transform_system_bundle::build(&mut world, &mut resources);
 
-    let parent_entity = *world
-        .insert(
-            (),
-            vec![(
-                // Always needed for an Entity that has any space transform
-                LocalToWorld::identity(),
-                // The only mutable space transform a parent has is a translation.
-                Translation::new(100.0, 0.0, 0.0),
-            )],
-        )
-        .first()
-        .unwrap();
+    let parent_entity = world.push((
+        // Always needed for an Entity that has any space transform
+        LocalToWorld::identity(),
+        // The only mutable space transform a parent has is a translation.
+        Translation::new(100.0, 0.0, 0.0),
+    ));
 
-    world.insert(
-        (),
-        vec![
-            (
-                // Again, always need a `LocalToWorld` component for the Entity to have a custom
-                // space transform.
-                LocalToWorld::identity(),
-                // Here we define a Translation, Rotation and uniform Scale.
-                Translation::new(1.0, 2.0, 3.0),
-                Rotation::from_euler_angles(3.14, 0.0, 0.0),
-                Scale(2.0),
-                // Add a Parent and LocalToParent component to attach a child to a parent.
-                Parent(parent_entity),
-                LocalToParent::identity(),
-            );
-            4
-        ],
-    );
+    world.extend(vec![
+        (
+            // Again, always need a `LocalToWorld` component for the Entity to have a custom
+            // space transform.
+            LocalToWorld::identity(),
+            // Here we define a Translation, Rotation and uniform Scale.
+            Translation::new(1.0, 2.0, 3.0),
+            Rotation::from_euler_angles(3.14, 0.0, 0.0),
+            Scale(2.0),
+            // Add a Parent and LocalToParent component to attach a child to a parent.
+            Parent(parent_entity),
+            LocalToParent::identity(),
+        );
+        4
+    ]);
 }
 
 fn main() {
@@ -55,30 +46,21 @@ fn main() {
     let mut transform_system_bundle = transform_system_bundle::build(&mut world, &mut resources);
 
     // See `./types_of_transforms.rs` for an explanation of space-transform types.
-    let parent_entity = *world
-        .insert(
-            (),
-            vec![(LocalToWorld::identity(), Translation::new(100.0, 0.0, 0.0))],
-        )
-        .first()
-        .unwrap();
+    let parent_entity = world.push((LocalToWorld::identity(), Translation::new(100.0, 0.0, 0.0)));
 
     let four_children: Vec<_> = world
-        .insert(
-            (),
-            vec![
-                (
-                    LocalToWorld::identity(),
-                    Translation::new(1.0, 2.0, 3.0),
-                    Rotation::from_euler_angles(3.14, 0.0, 0.0),
-                    Scale(2.0),
-                    // Add a Parent and LocalToParent component to attach a child to a parent.
-                    Parent(parent_entity),
-                    LocalToParent::identity(),
-                );
-                4
-            ],
-        )
+        .extend(vec![
+            (
+                LocalToWorld::identity(),
+                Translation::new(1.0, 2.0, 3.0),
+                Rotation::from_euler_angles(3.14, 0.0, 0.0),
+                Scale(2.0),
+                // Add a Parent and LocalToParent component to attach a child to a parent.
+                Parent(parent_entity),
+                LocalToParent::identity(),
+            );
+            4
+        ])
         .iter()
         .cloned()
         .collect();
@@ -92,39 +74,50 @@ fn main() {
         system
             .command_buffer_mut(world.id())
             .unwrap()
-            .write(&mut world);
+            .flush(&mut world);
     }
 
     // At this point all parents with children have a correct `Children` component.
     let parents_children = world
-        .get_component::<Children>(parent_entity)
+        .entry_ref(parent_entity)
+        .unwrap()
+        .get_component::<Children>()
         .unwrap()
         .0
         .clone();
 
-    println!("Parent {}", parent_entity);
+    println!("Parent {:?}", parent_entity);
     for child in parents_children.iter() {
-        println!(" -> Has child: {}", child);
+        println!(" -> Has child: {:?}", child);
     }
 
     // Each child will also have a `LocalToParent` component attached to it, which is a
     // space-transform from its local space to that of its parent.
     for child in four_children.iter() {
-        println!("The child {}", child);
+        println!("The child {:?}", child);
         println!(
             " -> Has a LocalToParent matrix: {}",
-            *world.get_component::<LocalToParent>(*child).unwrap()
+            world
+                .entry_ref(*child)
+                .unwrap()
+                .get_component::<LocalToParent>()
+                .unwrap()
         );
         println!(
             " -> Has a LocalToWorld matrix: {}",
-            *world.get_component::<LocalToWorld>(*child).unwrap()
+            world
+                .entry_ref(*child)
+                .unwrap()
+                .get_component::<LocalToWorld>()
+                .unwrap()
         );
     }
 
     // Re-parent the second child to be a grandchild of the first.
     world
-        .add_component(four_children[1], Parent(four_children[0]))
-        .unwrap();
+        .entry(four_children[1])
+        .unwrap()
+        .add_component(Parent(four_children[0]));
 
     // Re-running the system will cleanup and fix all `Children` components.
     for system in transform_system_bundle.iter_mut() {
@@ -132,34 +125,43 @@ fn main() {
         system
             .command_buffer_mut(world.id())
             .unwrap()
-            .write(&mut world);
+            .flush(&mut world);
     }
 
     println!("After the second child was re-parented as a grandchild of the first child...");
 
     for child in world
-        .get_component::<Children>(parent_entity)
+        .entry_ref(parent_entity)
+        .unwrap()
+        .get_component::<Children>()
         .unwrap()
         .0
         .iter()
     {
-        println!("Parent {} has child: {}", parent_entity, child);
+        println!("Parent {:?} has child: {:?}", parent_entity, child);
     }
 
     for grandchild in world
-        .get_component::<Children>(four_children[0])
+        .entry_ref(four_children[0])
+        .unwrap()
+        .get_component::<Children>()
         .unwrap()
         .0
         .iter()
     {
-        println!("Child {} has grandchild: {}", four_children[0], grandchild);
+        println!(
+            "Child {:?} has grandchild: {:?}",
+            four_children[0], grandchild
+        );
     }
 
-    println!("Grandchild: {}", four_children[1]);
+    println!("Grandchild: {:?}", four_children[1]);
     println!(
         " -> Has a LocalToWorld matrix: {}",
-        *world
-            .get_component::<LocalToWorld>(four_children[1])
+        world
+            .entry_ref(four_children[1])
+            .unwrap()
+            .get_component::<LocalToWorld>()
             .unwrap()
     );
 }

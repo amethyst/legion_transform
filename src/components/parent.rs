@@ -1,4 +1,4 @@
-use crate::ecs::prelude::*;
+use crate::ecs::*;
 use shrinkwraprs::Shrinkwrap;
 
 #[derive(Shrinkwrap, Debug, Copy, Clone, Eq, PartialEq)]
