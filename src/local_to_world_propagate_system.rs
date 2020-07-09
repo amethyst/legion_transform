@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use crate::{
     components::*,
-    ecs::{prelude::*, system::PreparedWorld},
+    ecs::{prelude::*, subworld::SubWorld},
 };
 
 pub fn build(_: &mut World) -> Box<dyn Schedulable> {
@@ -22,7 +22,7 @@ pub fn build(_: &mut World) -> Box<dyn Schedulable> {
 
 fn propagate_recursive(
     parent_local_to_world: LocalToWorld,
-    world: &mut PreparedWorld,
+    world: &mut SubWorld,
     entity: Entity,
     commands: &mut CommandBuffer,
 ) {
@@ -66,6 +66,7 @@ mod test {
         let _ = env_logger::builder().is_test(true).try_init();
 
         let mut world = Universe::new().create_world();
+        let mut resources = Resources::default();
 
         let hierarchy_maintenance_systems = hierarchy_maintenance_system::build(&mut world);
         let local_to_parent_system = local_to_parent_system::build(&mut world);
@@ -104,18 +105,20 @@ mod test {
 
         // Run the needed systems on it.
         for system in hierarchy_maintenance_systems.iter() {
-            system.run(&mut world);
-            system.command_buffer_mut().write(&mut world);
+            system.run(&mut world, &mut resources);
+            system.command_buffer_mut(world.id()).unwrap().write(&mut world);
         }
-        local_to_parent_system.run(&mut world);
+        local_to_parent_system.run(&mut world, &mut resources);
         local_to_parent_system
-            .command_buffer_mut()
+            .command_buffer_mut(world.id())
+            .unwrap()
             .write(&mut world);
-        local_to_world_system.run(&mut world);
-        local_to_world_system.command_buffer_mut().write(&mut world);
-        local_to_world_propagate_system.run(&mut world);
+        local_to_world_system.run(&mut world, &mut resources);
+        local_to_world_system.command_buffer_mut(world.id()).unwrap().write(&mut world);
+        local_to_world_propagate_system.run(&mut world, &mut resources);
         local_to_world_propagate_system
-            .command_buffer_mut()
+            .command_buffer_mut(world.id())
+            .unwrap()
             .write(&mut world);
 
         assert_eq!(

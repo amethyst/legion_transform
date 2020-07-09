@@ -133,6 +133,7 @@ mod test {
         let _ = env_logger::builder().is_test(true).try_init();
 
         let mut world = Universe::new().create_world();
+        let mut resources = Resources::default();
 
         let systems = build(&mut world);
 
@@ -166,8 +167,8 @@ mod test {
         world.add_component(e2, Parent(parent));
 
         for system in systems.iter() {
-            system.run(&mut world);
-            system.command_buffer_mut().write(&mut world);
+            system.run(&mut world, &mut resources);
+            system.command_buffer_mut(world.id()).unwrap().write(&mut world);
         }
 
         assert_eq!(
@@ -186,8 +187,8 @@ mod test {
 
         // Run the system on it
         for system in systems.iter() {
-            system.run(&mut world);
-            system.command_buffer_mut().write(&mut world);
+            system.run(&mut world, &mut resources);
+            system.command_buffer_mut(world.id()).unwrap().write(&mut world);
         }
 
         assert_eq!(
@@ -216,8 +217,8 @@ mod test {
 
         // Run the system on it
         for system in systems.iter() {
-            system.run(&mut world);
-            system.command_buffer_mut().write(&mut world);
+            system.run(&mut world, &mut resources);
+            system.command_buffer_mut(world.id()).unwrap().write(&mut world);
         }
 
         assert_eq!(

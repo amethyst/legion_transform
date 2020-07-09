@@ -221,6 +221,7 @@ mod test {
         let _ = env_logger::builder().is_test(true).try_init();
 
         let mut world = Universe::new().create_world();
+        let mut resources = Resources::default();
         let system = build(&mut world);
 
         let ltw = LocalToParent::identity();
@@ -243,8 +244,8 @@ mod test {
         let translation_rotation_nus = *world.insert((), vec![(ltw, t, r, nus)]).first().unwrap();
 
         // Run the system
-        system.run(&mut world);
-        system.command_buffer_mut().write(&mut world);
+        system.run(&mut world, &mut resources);
+        system.command_buffer_mut(world.id()).unwrap().write(&mut world);
 
         // Verify that each was transformed correctly.
         assert_eq!(
