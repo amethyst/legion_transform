@@ -222,7 +222,9 @@ mod test {
 
         let mut resources = Resources::default();
         let mut world = Universe::new().create_world();
-        let mut system = build(&mut world, &mut resources);
+        let mut schedule = Schedule::builder()
+            .add_system(build(&mut world, &mut resources))
+            .build();
 
         let ltw = LocalToParent::identity();
         let t = Translation::new(1.0, 2.0, 3.0);
@@ -244,11 +246,7 @@ mod test {
         let translation_rotation_nus = *world.insert((), vec![(ltw, t, r, nus)]).first().unwrap();
 
         // Run the system
-        system.run(&mut world, &mut resources);
-        system
-            .command_buffer_mut(world.id())
-            .unwrap()
-            .write(&mut world);
+        schedule.execute(&mut world, &mut resources);
 
         // Verify that each was transformed correctly.
         assert_eq!(

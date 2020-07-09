@@ -146,6 +146,11 @@ mod test {
         let mut world = Universe::new().create_world();
 
         let mut systems = build(&mut world, &mut resources);
+        let mut schedule = Schedule::builder()
+            .add_system(systems.remove(0))
+            .flush()
+            .add_system(systems.remove(0))
+            .build();
 
         // Add parent entities
         let parent = *world
@@ -176,13 +181,7 @@ mod test {
         world.add_component(e1, Parent(parent)).unwrap();
         world.add_component(e2, Parent(parent)).unwrap();
 
-        for system in systems.iter_mut() {
-            system.run(&mut world, &mut resources);
-            system
-                .command_buffer_mut(world.id())
-                .unwrap()
-                .write(&mut world);
-        }
+        schedule.execute(&mut world, &mut resources);
 
         assert_eq!(
             world
@@ -198,14 +197,8 @@ mod test {
         // Parent `e1` to `e2`.
         (*world.get_component_mut::<Parent>(e1).unwrap()).0 = e2;
 
-        // Run the system on it
-        for system in systems.iter_mut() {
-            system.run(&mut world, &mut resources);
-            system
-                .command_buffer_mut(world.id())
-                .unwrap()
-                .write(&mut world);
-        }
+        // Run the systems
+        schedule.execute(&mut world, &mut resources);
 
         assert_eq!(
             world
@@ -231,14 +224,8 @@ mod test {
 
         world.delete(e1);
 
-        // Run the system on it
-        for system in systems.iter_mut() {
-            system.run(&mut world, &mut resources);
-            system
-                .command_buffer_mut(world.id())
-                .unwrap()
-                .write(&mut world);
-        }
+        // Run the systems
+        schedule.execute(&mut world, &mut resources);
 
         assert_eq!(
             world

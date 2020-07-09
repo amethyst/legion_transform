@@ -1,8 +1,5 @@
 #![allow(dead_code)]
-use crate::{
-    components::*,
-    ecs::prelude::*,
-};
+use crate::{components::*, ecs::prelude::*};
 
 pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
     SystemBuilder::<()>::new("LocalToWorldPropagateSystem")
@@ -70,10 +67,20 @@ mod test {
 
         let mut hierarchy_maintenance_systems =
             hierarchy_maintenance_system::build(&mut world, &mut resources);
-        let mut local_to_parent_system = local_to_parent_system::build(&mut world, &mut resources);
-        let mut local_to_world_system = local_to_world_system::build(&mut world, &mut resources);
-        let mut local_to_world_propagate_system =
-            local_to_world_propagate_system::build(&mut world, &mut resources);
+        let mut schedule = Schedule::builder()
+            .add_system(hierarchy_maintenance_systems.remove(0))
+            .flush()
+            .add_system(hierarchy_maintenance_systems.remove(0))
+            .flush()
+            .add_system(local_to_parent_system::build(&mut world, &mut resources))
+            .flush()
+            .add_system(local_to_world_system::build(&mut world, &mut resources))
+            .flush()
+            .add_system(local_to_world_propagate_system::build(
+                &mut world,
+                &mut resources,
+            ))
+            .build();
 
         // Root entity
         let parent = *world
@@ -105,29 +112,8 @@ mod test {
         world.add_component(e1, Parent(parent)).unwrap();
         world.add_component(e2, Parent(parent)).unwrap();
 
-        // Run the needed systems on it.
-        for system in hierarchy_maintenance_systems.iter_mut() {
-            system.run(&mut world, &mut resources);
-            system
-                .command_buffer_mut(world.id())
-                .unwrap()
-                .write(&mut world);
-        }
-        local_to_parent_system.run(&mut world, &mut resources);
-        local_to_parent_system
-            .command_buffer_mut(world.id())
-            .unwrap()
-            .write(&mut world);
-        local_to_world_system.run(&mut world, &mut resources);
-        local_to_world_system
-            .command_buffer_mut(world.id())
-            .unwrap()
-            .write(&mut world);
-        local_to_world_propagate_system.run(&mut world, &mut resources);
-        local_to_world_propagate_system
-            .command_buffer_mut(world.id())
-            .unwrap()
-            .write(&mut world);
+        // Run systems
+        schedule.execute(&mut world, &mut resources);
 
         assert_eq!(
             world.get_component::<LocalToWorld>(e1).unwrap().0,
