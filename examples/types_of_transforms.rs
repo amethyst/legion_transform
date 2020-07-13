@@ -6,10 +6,11 @@ use legion_transform::prelude::*;
 
 fn main() {
     // Create a normal Legion World
-    let mut world = Universe::default().create_world();
+    let mut world = Universe::new().create_world();
+    let mut resources = Resources::default();
 
     // Create a system bundle (vec of systems) for LegionTransform
-    let transform_system_bundle = transform_system_bundle::build(&mut world);
+    let mut transform_system_bundle = transform_system_bundle::build(&mut world, &mut resources);
 
     // A user-defined space transform is split into 4 different components: [`Translation`,
     // `Rotation`, `Scale`, `NonUniformScale`]. Any combination of these components can be added to
@@ -77,14 +78,17 @@ fn main() {
     );
 
     // Run the system bundle (this API will likely change).
-    for system in transform_system_bundle.iter() {
-        system.run(&world);
-        system.command_buffer_mut().write(&mut world);
+    for system in transform_system_bundle.iter_mut() {
+        system.run(&mut world, &mut resources);
+        system
+            .command_buffer_mut(world.id())
+            .unwrap()
+            .write(&mut world);
     }
 
     // At this point all `LocalToWorld` components have correct values in them. Running the system
     // again will result in a short-circuit as only changed components are considered for update.
-    let mut query = <Read<LocalToWorld>>::query();
+    let query = <Read<LocalToWorld>>::query();
     for (entity, local_to_world) in query.iter_entities(&mut world) {
         println!(
             "Entity {} and a LocalToWorld matrix: {}",

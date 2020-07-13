@@ -1,10 +1,7 @@
 #![allow(dead_code)]
-use crate::{
-    components::*,
-    ecs::{prelude::*, system::PreparedWorld},
-};
+use crate::{components::*, ecs::prelude::*};
 
-pub fn build(_: &mut World) -> Box<dyn Schedulable> {
+pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
     SystemBuilder::<()>::new("LocalToWorldPropagateSystem")
         // Entities with a `Children` and `LocalToWorld` but NOT a `Parent` (ie those that are
         // roots of a hierarchy).
@@ -22,7 +19,7 @@ pub fn build(_: &mut World) -> Box<dyn Schedulable> {
 
 fn propagate_recursive(
     parent_local_to_world: LocalToWorld,
-    world: &mut PreparedWorld,
+    world: &SubWorld,
     entity: Entity,
     commands: &mut CommandBuffer,
 ) {
@@ -65,12 +62,25 @@ mod test {
     fn did_propagate() {
         let _ = env_logger::builder().is_test(true).try_init();
 
+        let mut resources = Resources::default();
         let mut world = Universe::new().create_world();
 
-        let hierarchy_maintenance_systems = hierarchy_maintenance_system::build(&mut world);
-        let local_to_parent_system = local_to_parent_system::build(&mut world);
-        let local_to_world_system = local_to_world_system::build(&mut world);
-        let local_to_world_propagate_system = local_to_world_propagate_system::build(&mut world);
+        let mut hierarchy_maintenance_systems =
+            hierarchy_maintenance_system::build(&mut world, &mut resources);
+        let mut schedule = Schedule::builder()
+            .add_system(hierarchy_maintenance_systems.remove(0))
+            .flush()
+            .add_system(hierarchy_maintenance_systems.remove(0))
+            .flush()
+            .add_system(local_to_parent_system::build(&mut world, &mut resources))
+            .flush()
+            .add_system(local_to_world_system::build(&mut world, &mut resources))
+            .flush()
+            .add_system(local_to_world_propagate_system::build(
+                &mut world,
+                &mut resources,
+            ))
+            .build();
 
         // Root entity
         let parent = *world
@@ -99,24 +109,11 @@ mod test {
         let (e1, e2) = (children[0], children[1]);
 
         // Parent `e1` and `e2` to `parent`.
-        world.add_component(e1, Parent(parent));
-        world.add_component(e2, Parent(parent));
+        world.add_component(e1, Parent(parent)).unwrap();
+        world.add_component(e2, Parent(parent)).unwrap();
 
-        // Run the needed systems on it.
-        for system in hierarchy_maintenance_systems.iter() {
-            system.run(&mut world);
-            system.command_buffer_mut().write(&mut world);
-        }
-        local_to_parent_system.run(&mut world);
-        local_to_parent_system
-            .command_buffer_mut()
-            .write(&mut world);
-        local_to_world_system.run(&mut world);
-        local_to_world_system.command_buffer_mut().write(&mut world);
-        local_to_world_propagate_system.run(&mut world);
-        local_to_world_propagate_system
-            .command_buffer_mut()
-            .write(&mut world);
+        // Run systems
+        schedule.execute(&mut world, &mut resources);
 
         assert_eq!(
             world.get_component::<LocalToWorld>(e1).unwrap().0,

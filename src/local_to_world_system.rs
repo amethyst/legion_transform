@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use crate::{components::*, ecs::prelude::*, math::Matrix4};
 
-pub fn build(_: &mut World) -> Box<dyn Schedulable> {
+pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
     SystemBuilder::<()>::new("LocalToWorldUpdateSystem")
         // Translation
         .with_query(<(Write<LocalToWorld>, Read<Translation>)>::query().filter(
@@ -218,16 +218,14 @@ pub fn build(_: &mut World) -> Box<dyn Schedulable> {
                 });
 
                 // Just to issue warnings: Scale + NonUniformScale
-                unsafe {
-                    l.iter_entities_immutable(world).for_each(
-                        |(entity, (mut _ltw, _scale, _non_uniform_scale))| {
-                            log::warn!(
-                                "Entity {:?} has both a Scale and NonUniformScale component.",
-                                entity
-                            );
-                        },
-                    );
-                }
+                l.iter_entities(world).for_each(
+                    |(entity, (mut _ltw, _scale, _non_uniform_scale))| {
+                        log::warn!(
+                            "Entity {:?} has both a Scale and NonUniformScale component.",
+                            entity
+                        );
+                    },
+                );
             });
         })
 }
@@ -240,8 +238,11 @@ mod test {
     fn correct_world_transformation() {
         let _ = env_logger::builder().is_test(true).try_init();
 
+        let mut resources = Resources::default();
         let mut world = Universe::new().create_world();
-        let system = build(&mut world);
+        let mut schedule = Schedule::builder()
+            .add_system(build(&mut world, &mut resources))
+            .build();
 
         let ltw = LocalToWorld::identity();
         let t = Translation::new(1.0, 2.0, 3.0);
@@ -263,8 +264,7 @@ mod test {
         let translation_rotation_nus = *world.insert((), vec![(ltw, t, r, nus)]).first().unwrap();
 
         // Run the system
-        system.run(&mut world);
-        system.command_buffer_mut().write(&mut world);
+        schedule.execute(&mut world, &mut resources);
 
         // Verify that each was transformed correctly.
         assert_eq!(

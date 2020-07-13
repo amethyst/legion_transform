@@ -7,10 +7,11 @@ use legion_transform::prelude::*;
 #[allow(unused)]
 fn tldr_sample() {
     // Create a normal Legion World
-    let mut world = Universe::default().create_world();
+    let mut world = Universe::new().create_world();
+    let mut resources = Resources::default();
 
     // Create a system bundle (vec of systems) for LegionTransform
-    let transform_system_bundle = transform_system_bundle::build(&mut world);
+    let transform_system_bundle = transform_system_bundle::build(&mut world, &mut resources);
 
     let parent_entity = *world
         .insert(
@@ -47,10 +48,11 @@ fn tldr_sample() {
 
 fn main() {
     // Create a normal Legion World
-    let mut world = Universe::default().create_world();
+    let mut resources = Resources::default();
+    let mut world = Universe::new().create_world();
 
     // Create a system bundle (vec of systems) for LegionTransform
-    let transform_system_bundle = transform_system_bundle::build(&mut world);
+    let mut transform_system_bundle = transform_system_bundle::build(&mut world, &mut resources);
 
     // See `./types_of_transforms.rs` for an explanation of space-transform types.
     let parent_entity = *world
@@ -85,9 +87,12 @@ fn main() {
     // component is updated by the transform system bundle and thus can be out of date (or
     // non-existent for newly added members). By this logic, the `Parent` components should be
     // considered the always-correct 'source of truth' for any hierarchy.
-    for system in transform_system_bundle.iter() {
-        system.run(&mut world);
-        system.command_buffer_mut().write(&mut world);
+    for system in transform_system_bundle.iter_mut() {
+        system.run(&mut world, &mut resources);
+        system
+            .command_buffer_mut(world.id())
+            .unwrap()
+            .write(&mut world);
     }
 
     // At this point all parents with children have a correct `Children` component.
@@ -117,12 +122,17 @@ fn main() {
     }
 
     // Re-parent the second child to be a grandchild of the first.
-    world.add_component(four_children[1], Parent(four_children[0]));
+    world
+        .add_component(four_children[1], Parent(four_children[0]))
+        .unwrap();
 
     // Re-running the system will cleanup and fix all `Children` components.
-    for system in transform_system_bundle.iter() {
-        system.run(&world);
-        system.command_buffer_mut().write(&mut world);
+    for system in transform_system_bundle.iter_mut() {
+        system.run(&mut world, &mut resources);
+        system
+            .command_buffer_mut(world.id())
+            .unwrap()
+            .write(&mut world);
     }
 
     println!("After the second child was re-parented as a grandchild of the first child...");

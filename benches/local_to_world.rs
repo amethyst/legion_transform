@@ -11,7 +11,7 @@ fn local_to_world_update_without_change(b: &mut Bencher) {
     let _ = env_logger::builder().is_test(true).try_init();
 
     let mut world = Universe::new().create_world();
-    let system = local_to_world_system::build(&mut world);
+    let system = local_to_world_system::build(&mut world, &mut resources);
 
     let ltw = LocalToWorld::identity();
     let t = Translation::new(1.0, 2.0, 3.0);

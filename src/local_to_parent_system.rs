@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use crate::{components::*, ecs::prelude::*, math::Matrix4};
 
-pub fn build(_: &mut World) -> Box<dyn Schedulable> {
+pub fn build(_: &mut World, _: &mut Resources) -> Box<dyn Schedulable> {
     SystemBuilder::<()>::new("LocalToParentUpdateSystem")
         // Translation
         .with_query(<(Write<LocalToParent>, Read<Translation>)>::query().filter(
@@ -220,8 +220,11 @@ mod test {
     fn correct_parent_transformation() {
         let _ = env_logger::builder().is_test(true).try_init();
 
+        let mut resources = Resources::default();
         let mut world = Universe::new().create_world();
-        let system = build(&mut world);
+        let mut schedule = Schedule::builder()
+            .add_system(build(&mut world, &mut resources))
+            .build();
 
         let ltw = LocalToParent::identity();
         let t = Translation::new(1.0, 2.0, 3.0);
@@ -243,8 +246,7 @@ mod test {
         let translation_rotation_nus = *world.insert((), vec![(ltw, t, r, nus)]).first().unwrap();
 
         // Run the system
-        system.run(&mut world);
-        system.command_buffer_mut().write(&mut world);
+        schedule.execute(&mut world, &mut resources);
 
         // Verify that each was transformed correctly.
         assert_eq!(

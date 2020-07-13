@@ -3,7 +3,7 @@ use crate::{components::*, ecs::prelude::*};
 use smallvec::SmallVec;
 use std::collections::HashMap;
 
-pub fn build(_: &mut World) -> Vec<Box<dyn Schedulable>> {
+pub fn build(_: &mut World, _: &mut Resources) -> Vec<Box<dyn Schedulable>> {
     let missing_previous_parent_system = SystemBuilder::<()>::new("MissingPreviousParentSystem")
         // Entities with missing `PreviousParent`
         .with_query(<Read<Parent>>::query().filter(
@@ -35,9 +35,12 @@ pub fn build(_: &mut World) -> Vec<Box<dyn Schedulable>> {
             for (entity, previous_parent) in queries.0.iter_entities(world) {
                 log::trace!("Parent was removed from {}", entity);
                 if let Some(previous_parent_entity) = previous_parent.0 {
-                    if let Some(mut previous_parent_children) =
-                        world.get_component_mut::<Children>(previous_parent_entity)
-                    {
+                    // We have to do unsafe call because world was already borrowed. However,
+                    // this is safe because we access `Children` component, which was not present
+                    // in previous query and was defined for unique write access in `SystemBuilder`.
+                    if let Some(mut previous_parent_children) = unsafe {
+                        world.get_component_mut_unchecked::<Children>(previous_parent_entity)
+                    } {
                         log::trace!(" > Removing {} from it's prev parent's children", entity);
                         previous_parent_children.0.retain(|e| *e != entity);
                     }
@@ -49,7 +52,12 @@ pub fn build(_: &mut World) -> Vec<Box<dyn Schedulable>> {
                 HashMap::<Entity, SmallVec<[Entity; 8]>>::with_capacity(16);
 
             // Entities with a changed Parent (that also have a PreviousParent, even if None)
-            for (entity, (parent, mut previous_parent)) in queries.1.iter_entities(world) {
+            // We have to do unsafe call because we mutably access world multiple times. However,
+            // this is safe because we ensure that each component is accessed uniquely and components
+            // not present in the query (`Children`) were marked as writable by the `SystemBuilder`.
+            for (entity, (parent, mut previous_parent)) in
+                unsafe { queries.1.iter_entities_unchecked(world) }
+            {
                 log::trace!("Parent changed for {}", entity);
 
                 // If the `PreviousParent` is not None.
@@ -61,9 +69,9 @@ pub fn build(_: &mut World) -> Vec<Box<dyn Schedulable>> {
                     }
 
                     // Remove from `PreviousParent.Children`.
-                    if let Some(mut previous_parent_children) =
-                        world.get_component_mut::<Children>(previous_parent_entity)
-                    {
+                    if let Some(mut previous_parent_children) = unsafe {
+                        world.get_component_mut_unchecked::<Children>(previous_parent_entity)
+                    } {
                         log::trace!(" > Removing {} from prev parent's children", entity);
                         (*previous_parent_children).0.retain(|e| *e != entity);
                     }
@@ -75,7 +83,8 @@ pub fn build(_: &mut World) -> Vec<Box<dyn Schedulable>> {
                 // Add to the parent's `Children` (either the real component, or
                 // `children_additions`).
                 log::trace!("Adding {} to it's new parent {}", entity, parent.0);
-                if let Some(mut new_parent_children) = world.get_component_mut::<Children>(parent.0)
+                if let Some(mut new_parent_children) =
+                    unsafe { world.get_component_mut_unchecked::<Children>(parent.0) }
                 {
                     // This is the parent
                     log::trace!(
@@ -132,9 +141,16 @@ mod test {
     fn correct_children() {
         let _ = env_logger::builder().is_test(true).try_init();
 
+        let mut resources = Resources::default();
+
         let mut world = Universe::new().create_world();
 
-        let systems = build(&mut world);
+        let mut systems = build(&mut world, &mut resources);
+        let mut schedule = Schedule::builder()
+            .add_system(systems.remove(0))
+            .flush()
+            .add_system(systems.remove(0))
+            .build();
 
         // Add parent entities
         let parent = *world
@@ -162,13 +178,10 @@ mod test {
         let (e1, e2) = (children[0], children[1]);
 
         // Parent `e1` and `e2` to `parent`.
-        world.add_component(e1, Parent(parent));
-        world.add_component(e2, Parent(parent));
+        world.add_component(e1, Parent(parent)).unwrap();
+        world.add_component(e2, Parent(parent)).unwrap();
 
-        for system in systems.iter() {
-            system.run(&mut world);
-            system.command_buffer_mut().write(&mut world);
-        }
+        schedule.execute(&mut world, &mut resources);
 
         assert_eq!(
             world
@@ -184,11 +197,8 @@ mod test {
         // Parent `e1` to `e2`.
         (*world.get_component_mut::<Parent>(e1).unwrap()).0 = e2;
 
-        // Run the system on it
-        for system in systems.iter() {
-            system.run(&mut world);
-            system.command_buffer_mut().write(&mut world);
-        }
+        // Run the systems
+        schedule.execute(&mut world, &mut resources);
 
         assert_eq!(
             world
@@ -214,11 +224,8 @@ mod test {
 
         world.delete(e1);
 
-        // Run the system on it
-        for system in systems.iter() {
-            system.run(&mut world);
-            system.command_buffer_mut().write(&mut world);
-        }
+        // Run the systems
+        schedule.execute(&mut world, &mut resources);
 
         assert_eq!(
             world

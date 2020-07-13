@@ -19,7 +19,7 @@ See [examples/hierarchy.rs](examples/hierarchy.rs)
 #[allow(unused)]
 fn tldr_sample() {
     // Create a normal Legion World
-    let mut world = Universe::default().create_world();
+    let mut world = Universe::new().create_world();
 
     // Create a system bundle (vec of systems) for LegionTransform
     let transform_system_bundle = TransformSystemBundle::default().build();
