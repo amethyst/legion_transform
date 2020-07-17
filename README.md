@@ -2,8 +2,8 @@
 
 [![Build Status][build_img]][build_lnk]
 
-[build_img]: https://travis-ci.org/AThilenius/legion_transform.svg?branch=master
-[build_lnk]: https://travis-ci.org/AThilenius/legion_transform
+[build_img]: https://travis-ci.org/amethyst/legion_transform.svg?branch=master
+[build_lnk]: https://travis-ci.org/amethyst/legion_transform
 
 A hierarchical space transform system, implemented using [Legion
 ECS](https://github.com/TomGillen/legion). The implementation is based heavily
