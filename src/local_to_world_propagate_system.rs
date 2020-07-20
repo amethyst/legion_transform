@@ -120,7 +120,7 @@ mod test {
         world.entry(e1).unwrap().add_component(Parent(parent));
         world.entry(e2).unwrap().add_component(Parent(parent));
 
-        // Run the needed systems on it.
+        // Run systems
         schedule.execute(&mut world, &mut resources);
 
         assert_eq!(

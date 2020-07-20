@@ -2,8 +2,8 @@
 
 [![Build Status][build_img]][build_lnk]
 
-[build_img]: https://travis-ci.org/AThilenius/legion_transform.svg?branch=master
-[build_lnk]: https://travis-ci.org/AThilenius/legion_transform
+[build_img]: https://travis-ci.org/amethyst/legion_transform.svg?branch=master
+[build_lnk]: https://travis-ci.org/amethyst/legion_transform
 
 A hierarchical space transform system, implemented using [Legion
 ECS](https://github.com/TomGillen/legion). The implementation is based heavily
@@ -69,19 +69,19 @@ directly from their space to world space).
 
 A 3D space transform can come in many forms. The most generic of these is a
 matrix 4x4 which can represent any arbitrary (linear) space transform, including
-projections and sheers. These are not rarely useful for entity transformations
+projections and sheers. These are rarely useful for entity transformations
 though, which are normally defined by things like
 
 - A **Translation** - movement along the X, Y or Z axis.
 - A **Rotation** - 3D rotation encoded as a Unit Quaternion to prevent [gimbal
   lock](https://en.wikipedia.org/wiki/Gimbal_lock).
-- A **Scale** - Defined as a single floating point values, but often
+- A **Scale** - Defined as a single floating point value, but often
   **incorrectly defined as a Vector3** (which is a `NonUniformScale`) in other
   engines and 3D applications.
 - A **NonUniformScale** - Defined as a scale for the X, Y and Z axis
   independently from each other.
 
-In fact, in Legion Transform, each of the above is it's own `Component` type.
+In fact, in Legion Transform, each of the above is its own `Component` type.
 These components can be added in any combination to an `Entity` with the only
 exception being that `Scale` and `NonUniformScale` are mutually exclusive.
 
@@ -148,17 +148,17 @@ changes. This may someday change, but it is expected that the number of entities
 in a dynamic hierarchy for a final game should be small (static hierarchies can
 be pre-baked, where each entity gets a pre-baked `LocalToWorld` matrix).
 
-## This is no good 'tall, why didn't you do is <this> way?
+## This is no good 'tall, why didn't you do it _this_ way?
 
 The first implementation used Legion `Tags` to store the Parent component for
-any child. This allowed for things like `O(1)` lookup of children, but was
-deemed way too much fragmentation (Legion is an archetypical, chunked ECS).
+any child. This allowed for things like `O(1)` lookup of children, but caused
+too much fragmentation (Legion is an archetypical, chunked ECS).
 
 The second implementation was based on [this fine article by Michele
 Caini](https://skypjack.github.io/2019-06-25-ecs-baf-part-4/) which structures
-the hierarchy as explicit parent pointer, a pointer to the first (and only
+the hierarchy as an explicit parent pointer, a pointer to the first (and only
 first) child, and implicitly forms a linked-list of siblings. While elegant, the
-actual implementation was both complicated an near-impossible to multi-thread.
+actual implementation was both complicated and near-impossible to multi-thread.
 For example, iterating through children entities required a global query to the
 Legion `World` for each child. I decided a small amount of memory by storing a
 possibly-out-of-date `SmallVec` of children was worth sacrificing on parent
