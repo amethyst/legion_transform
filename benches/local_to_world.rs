@@ -13,7 +13,7 @@ fn local_to_world_update_without_change(b: &mut Bencher) {
     let mut resources = Resources::default();
     let mut world = Universe::new().create_world();
     let mut schedule = Schedule::builder()
-        .add_system(local_to_world_system::build(&mut world, &mut resources))
+        .add_system(local_to_world_system::build())
         .build();
 
     let ltw = LocalToWorld::identity();

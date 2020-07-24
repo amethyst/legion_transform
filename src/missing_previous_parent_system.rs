@@ -3,7 +3,7 @@ use crate::{
     ecs::{systems::Schedulable, *},
 };
 
-pub fn build(_: &mut World, _: &mut Resources) -> impl Schedulable {
+pub fn build() -> impl Schedulable {
     SystemBuilder::<()>::new("MissingPreviousParentSystem")
         // Entities with missing `PreviousParent`
         .with_query(<(Entity, Read<Parent>)>::query().filter(
@@ -31,9 +31,7 @@ mod test {
         let mut resources = Resources::default();
         let mut world = Universe::new().create_world();
 
-        let mut schedule = Schedule::builder()
-            .add_system(build(&mut world, &mut resources))
-            .build();
+        let mut schedule = Schedule::builder().add_system(build()).build();
 
         let e1 = world.push((
             Translation::identity(),
@@ -55,7 +53,7 @@ mod test {
                 .entry(e1)
                 .unwrap()
                 .get_component::<PreviousParent>()
-                .is_some(),
+                .is_ok(),
             false
         );
 
@@ -64,7 +62,7 @@ mod test {
                 .entry(e2)
                 .unwrap()
                 .get_component::<PreviousParent>()
-                .is_some(),
+                .is_ok(),
             true
         );
     }

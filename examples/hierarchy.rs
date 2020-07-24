@@ -11,7 +11,7 @@ fn tldr_sample() {
     let mut resources = Resources::default();
 
     // Create a system bundle (vec of systems) for LegionTransform
-    let transform_system_bundle = transform_system_bundle::build(&mut world, &mut resources);
+    let transform_system_bundle = transform_system_bundle::build();
 
     let parent_entity = world.push((
         // Always needed for an Entity that has any space transform
@@ -43,7 +43,7 @@ fn main() {
     let mut world = Universe::new().create_world();
 
     // Create a system bundle (vec of systems) for LegionTransform
-    let mut transform_system_bundle = transform_system_bundle::build(&mut world, &mut resources);
+    let mut transform_system_bundle = transform_system_bundle::build();
 
     // See `./types_of_transforms.rs` for an explanation of space-transform types.
     let parent_entity = world.push((LocalToWorld::identity(), Translation::new(100.0, 0.0, 0.0)));
@@ -70,6 +70,7 @@ fn main() {
     // non-existent for newly added members). By this logic, the `Parent` components should be
     // considered the always-correct 'source of truth' for any hierarchy.
     for system in transform_system_bundle.iter_mut() {
+        system.prepare(&world);
         system.run(&mut world, &mut resources);
         system
             .command_buffer_mut(world.id())
@@ -121,6 +122,7 @@ fn main() {
 
     // Re-running the system will cleanup and fix all `Children` components.
     for system in transform_system_bundle.iter_mut() {
+        system.prepare(&world);
         system.run(&mut world, &mut resources);
         system
             .command_buffer_mut(world.id())

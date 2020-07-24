@@ -6,7 +6,7 @@ use crate::{
 use smallvec::SmallVec;
 use std::collections::HashMap;
 
-pub fn build(_: &mut World, _: &mut Resources) -> impl Schedulable {
+pub fn build() -> impl Schedulable {
     SystemBuilder::<()>::new("ParentUpdateSystem")
         // Entities with a removed `Parent`
         .with_query(<(Entity, Read<PreviousParent>)>::query().filter(!component::<Parent>()))
@@ -28,17 +28,12 @@ pub fn build(_: &mut World, _: &mut Resources) -> impl Schedulable {
             for (entity, previous_parent) in queries.0.iter(right) {
                 log::trace!("Parent was removed from {:?}", entity);
                 if let Some(previous_parent_entity) = previous_parent.0 {
-                    if let Some(mut previous_parent_entry) = left.entry_mut(previous_parent_entity)
+                    if let Some(previous_parent_children) = left
+                        .entry_mut(previous_parent_entity)
+                        .and_then(|entry| entry.into_component_mut::<Children>().ok())
                     {
-                        if let Some(previous_parent_children) =
-                            previous_parent_entry.get_component_mut::<Children>()
-                        {
-                            log::trace!(
-                                " > Removing {:?} from it's prev parent's children",
-                                entity
-                            );
-                            previous_parent_children.0.retain(|e| e != entity);
-                        }
+                        log::trace!(" > Removing {:?} from it's prev parent's children", entity);
+                        previous_parent_children.0.retain(|e| e != entity);
                     }
                 }
             }
@@ -60,14 +55,12 @@ pub fn build(_: &mut World, _: &mut Resources) -> impl Schedulable {
                     }
 
                     // Remove from `PreviousParent.Children`.
-                    if let Some(mut previous_parent_entry) = left.entry_mut(previous_parent_entity)
+                    if let Some(previous_parent_children) = left
+                        .entry_mut(previous_parent_entity)
+                        .and_then(|entry| entry.into_component_mut::<Children>().ok())
                     {
-                        if let Some(previous_parent_children) =
-                            previous_parent_entry.get_component_mut::<Children>()
-                        {
-                            log::trace!(" > Removing {:?} from prev parent's children", entity);
-                            previous_parent_children.0.retain(|e| e != entity);
-                        }
+                        log::trace!(" > Removing {:?} from prev parent's children", entity);
+                        previous_parent_children.0.retain(|e| e != entity);
                     }
                 }
 
@@ -77,29 +70,26 @@ pub fn build(_: &mut World, _: &mut Resources) -> impl Schedulable {
                 // Add to the parent's `Children` (either the real component, or
                 // `children_additions`).
                 log::trace!("Adding {:?} to it's new parent {:?}", entity, parent.0);
-                if let Some(mut new_parent_entry) = left.entry_mut(parent.0) {
-                    if let Some(new_parent_children) =
-                        new_parent_entry.get_component_mut::<Children>()
-                    {
-                        // This is the parent
-                        log::trace!(
-                            " > The new parent {:?} already has a `Children`, adding to it.",
-                            parent.0
-                        );
-                        new_parent_children.0.push(*entity);
-                    } else {
-                        // The parent doesn't have a children entity, lets add it
-                        log::trace!(
-                            "The new parent {:?} doesn't yet have `Children` component.",
-                            parent.0
-                        );
-                        children_additions
-                            .entry(parent.0)
-                            .or_insert_with(Default::default)
-                            .push(*entity);
-                    }
+                if let Some(new_parent_children) = left
+                    .entry_mut(parent.0)
+                    .and_then(|entry| entry.into_component_mut::<Children>().ok())
+                {
+                    // This is the parent
+                    log::trace!(
+                        " > The new parent {:?} already has a `Children`, adding to it.",
+                        parent.0
+                    );
+                    new_parent_children.0.push(*entity);
                 } else {
-                    log::error!("Parent entity {:?} does not exist!", entity);
+                    // The parent doesn't have a children entity, lets add it
+                    log::trace!(
+                        "The new parent {:?} doesn't yet have `Children` component.",
+                        parent.0
+                    );
+                    children_additions
+                        .entry(parent.0)
+                        .or_insert_with(Default::default)
+                        .push(*entity);
                 }
             }
 
@@ -146,12 +136,9 @@ mod test {
         let mut world = Universe::new().create_world();
 
         let mut schedule = Schedule::builder()
-            .add_system(missing_previous_parent_system::build(
-                &mut world,
-                &mut resources,
-            ))
+            .add_system(missing_previous_parent_system::build())
             .flush()
-            .add_system(build(&mut world, &mut resources))
+            .add_system(build())
             .build();
 
         // Add parent entities

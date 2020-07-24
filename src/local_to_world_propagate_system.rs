@@ -8,7 +8,7 @@ use crate::{
     },
 };
 
-pub fn build(_: &mut World, _: &mut Resources) -> impl Schedulable {
+pub fn build() -> impl Schedulable {
     SystemBuilder::<()>::new("LocalToWorldPropagateSystem")
         // Entities with a `Children` and `LocalToWorld` but NOT a `Parent` (ie those that are
         // roots of a hierarchy).
@@ -32,18 +32,16 @@ fn propagate_recursive(
 ) {
     log::trace!("Updating LocalToWorld for {:?}", entity);
     let local_to_parent = {
-        if let Some(entry) = world.entry_ref(entity) {
-            if let Some(local_to_parent) = entry.get_component::<LocalToParent>() {
-                *local_to_parent
-            } else {
-                log::warn!(
-                    "Entity {:?} is a child in the hierarchy but does not have a LocalToParent",
-                    entity
-                );
-                return;
-            }
+        if let Some(local_to_parent) = world
+            .entry_ref(entity)
+            .and_then(|entry| entry.into_component::<LocalToParent>().ok())
+        {
+            *local_to_parent
         } else {
-            log::warn!("Entity {:?} does not exist but is a list of childs", entity);
+            log::warn!(
+                "Entity {:?} is a child in the hierarchy but does not have a LocalToParent",
+                entity
+            );
             return;
         }
     };
@@ -82,21 +80,15 @@ mod test {
         let mut world = Universe::new().create_world();
 
         let mut schedule = Schedule::builder()
-            .add_system(missing_previous_parent_system::build(
-                &mut world,
-                &mut resources,
-            ))
+            .add_system(missing_previous_parent_system::build())
             .flush()
-            .add_system(parent_update_system::build(&mut world, &mut resources))
+            .add_system(parent_update_system::build())
             .flush()
-            .add_system(local_to_parent_system::build(&mut world, &mut resources))
+            .add_system(local_to_parent_system::build())
             .flush()
-            .add_system(local_to_world_system::build(&mut world, &mut resources))
+            .add_system(local_to_world_system::build())
             .flush()
-            .add_system(local_to_world_propagate_system::build(
-                &mut world,
-                &mut resources,
-            ))
+            .add_system(local_to_world_propagate_system::build())
             .build();
 
         // Root entity
