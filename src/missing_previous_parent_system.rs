@@ -1,9 +1,9 @@
 use crate::{
     components::*,
-    ecs::{systems::Schedulable, *},
+    ecs::{systems::ParallelRunnable, *},
 };
 
-pub fn build() -> impl Schedulable {
+pub fn build() -> impl ParallelRunnable {
     SystemBuilder::<()>::new("MissingPreviousParentSystem")
         // Entities with missing `PreviousParent`
         .with_query(<(Entity, Read<Parent>)>::query().filter(

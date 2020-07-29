@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 use crate::{
     components::*,
-    ecs::{systems::Schedulable, *},
+    ecs::{systems::ParallelRunnable, *},
     math::Matrix4,
 };
 
-pub fn build() -> impl Schedulable {
+pub fn build() -> impl ParallelRunnable {
     SystemBuilder::<()>::new("LocalToWorldUpdateSystem")
         // Translation
         .with_query(<(Write<LocalToWorld>, Read<Translation>)>::query().filter(

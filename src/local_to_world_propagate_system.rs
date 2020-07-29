@@ -2,13 +2,13 @@
 use crate::{
     components::*,
     ecs::{
-        systems::{CommandBuffer, Schedulable},
+        systems::{CommandBuffer, ParallelRunnable},
         world::SubWorld,
         *,
     },
 };
 
-pub fn build() -> impl Schedulable {
+pub fn build() -> impl ParallelRunnable {
     SystemBuilder::<()>::new("LocalToWorldPropagateSystem")
         // Entities with a `Children` and `LocalToWorld` but NOT a `Parent` (ie those that are
         // roots of a hierarchy).

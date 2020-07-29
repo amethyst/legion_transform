@@ -1,12 +1,12 @@
 #![allow(dead_code)]
 use crate::{
     components::*,
-    ecs::{systems::Schedulable, *},
+    ecs::{systems::ParallelRunnable, *},
 };
 use smallvec::SmallVec;
 use std::collections::HashMap;
 
-pub fn build() -> impl Schedulable {
+pub fn build() -> impl ParallelRunnable {
     SystemBuilder::<()>::new("ParentUpdateSystem")
         // Entities with a removed `Parent`
         .with_query(<(Entity, Read<PreviousParent>)>::query().filter(!component::<Parent>()))
