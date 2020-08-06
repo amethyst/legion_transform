@@ -7,7 +7,7 @@ use legion_transform::prelude::*;
 #[allow(unused)]
 fn tldr_sample() {
     // Create a normal Legion World
-    let mut world = Universe::new().create_world();
+    let mut world = World::default();
     let mut resources = Resources::default();
 
     // Create a system bundle (vec of systems) for LegionTransform
@@ -40,7 +40,7 @@ fn tldr_sample() {
 fn main() {
     // Create a normal Legion World
     let mut resources = Resources::default();
-    let mut world = Universe::new().create_world();
+    let mut world = World::default();
 
     // Create a system bundle (vec of systems) for LegionTransform
     let mut transform_system_bundle = transform_system_bundle::build();

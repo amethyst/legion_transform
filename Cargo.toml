@@ -7,7 +7,7 @@ edition = "2018"
 license = "MIT"
 
 [dependencies]
-legion = { git = "https://github.com/TomGillen/legion", features = ["extended-tuple-impls"] }
+legion = { git = "https://github.com/TomGillen/legion", features = ["extended-tuple-impls"], rev = "b93b636d" }
 log = "0.4"
 nalgebra = { version = "0.19.0", features = ["serde-serialize", "mint"] }
 rayon = "1.2"

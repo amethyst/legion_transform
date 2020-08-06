@@ -6,7 +6,7 @@ use legion_transform::prelude::*;
 
 fn main() {
     // Create a normal Legion World
-    let mut world = Universe::new().create_world();
+    let mut world = World::default();
     let mut resources = Resources::default();
 
     // Create a system bundle (vec of systems) for LegionTransform

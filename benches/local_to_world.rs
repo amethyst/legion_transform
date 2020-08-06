@@ -11,7 +11,7 @@ fn local_to_world_update_without_change(b: &mut Bencher) {
     let _ = env_logger::builder().is_test(true).try_init();
 
     let mut resources = Resources::default();
-    let mut world = Universe::new().create_world();
+    let mut world = World::default();
     let mut schedule = Schedule::builder()
         .add_system(local_to_world_system::build())
         .build();
